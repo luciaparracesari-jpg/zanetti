@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp
+          POSTGRES_DB: erp
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U erp" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://erp:erp@localhost:5432/erp
+      SEED_ADMIN_EMAIL: admin@ci.local
+      SEED_ADMIN_PASSWORD: CiAdmin2026a
+      WEB_ORIGIN: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Compilar paquetes y API
+        run: |
+          pnpm --filter @erp/shared build
+          pnpm --filter @erp/db build
+          pnpm --filter @erp/api build
+      - name: Migrar y sembrar
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+      - name: Pruebas de punta a punta de la API
+        run: |
+          node apps/api/dist/main.js &
+          for i in $(seq 1 30); do curl -sf localhost:4000/api/v1/health && break; sleep 1; done
+          cd apps/api
+          ADMIN_EMAIL=admin@ci.local ADMIN_PASSWORD=CiAdmin2026a ADMIN_NEW_PASSWORD=CiAdmin2026b pnpm test
+      - name: Compilar frontend
+        run: pnpm --filter @erp/web build

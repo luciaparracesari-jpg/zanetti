@@ -1,0 +1,81 @@
+@import 'tailwindcss';
+
+/*
+ * Paleta ERP clásica (sección 1 del planteamiento):
+ * fondo gris muy claro, menú lateral carbón, texto gris oscuro, azul sobrio,
+ * verde = positivo, rojo = alerta, ámbar = advertencia.
+ */
+@theme {
+  --font-sans: 'Segoe UI', 'Helvetica Neue', Arial, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+
+  --color-page: #f3f4f6;
+  --color-panel: #ffffff;
+  --color-line: #dfe2e7;
+  --color-line-strong: #c9ced6;
+  --color-ink: #2a2f36;
+  --color-ink-soft: #5b6470;
+  --color-ink-faint: #8a929c;
+
+  --color-side: #23272e;
+  --color-side-hover: #2e333b;
+  --color-side-active: #353b45;
+  --color-side-ink: #c9ced6;
+  --color-side-faint: #8a929c;
+
+  --color-brand: #1f5fa8;
+  --color-brand-hover: #194f8c;
+  --color-brand-soft: #e8f0fa;
+
+  --color-ok: #2e7d32;
+  --color-ok-soft: #e8f3e9;
+  --color-warn: #a86400;
+  --color-warn-soft: #fdf3e2;
+  --color-bad: #c62828;
+  --color-bad-soft: #fbeaea;
+
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
+  --text-base: 13.5px;
+}
+
+html,
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-size: 13.5px;
+}
+
+/* Números alineados en tablas y montos */
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+}
+
+/* Diálogo nativo */
+dialog::backdrop {
+  background: rgb(20 24 30 / 0.45);
+}
+
+/* Barras de desplazamiento discretas en tablas */
+.scroll-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #c5cad2;
+  border-radius: 4px;
+}
+
+@media print {
+  aside,
+  header {
+    display: none !important;
+  }
+}

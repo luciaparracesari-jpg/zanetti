@@ -1,0 +1,9 @@
+{$DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	# Todo pasa por el frontend; Next.js reenvía /api/* a la API interna.
+	reverse_proxy web:3000
+}
