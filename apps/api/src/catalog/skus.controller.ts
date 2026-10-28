@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
-import { barcodeSchema, kitComponentsSchema, skuCreateSchema, skuUpdateSchema } from '@erp/shared';
+import { barcodeSchema, kitComponentsSchema, packageSchema, skuCreateSchema, skuUpdateSchema } from '@erp/shared';
 import { Perm } from '../auth/decorators';
 import { CurrentActor, type Actor } from '../common/actor';
 import { readListQuery, str } from '../common/listing';
@@ -30,6 +30,7 @@ export class SkusController {
         channelId: str(query.channelId),
         isKit: bool(query.isKit),
         withoutListings: query.withoutListings === 'true',
+        withoutName: query.withoutName === 'true',
       },
       actor,
     );
@@ -92,6 +93,35 @@ export class SkusController {
     @CurrentActor() actor: Actor,
   ) {
     return this.skus.removeBarcode(id, barcodeId, actor);
+  }
+
+  @Post(':id/packages')
+  @Perm('productos.editar')
+  addPackage(@Param('id', ParseUUIDPipe) id: string, @Body() body: unknown, @CurrentActor() actor: Actor) {
+    return this.skus.addPackage(id, parse(packageSchema, body), actor);
+  }
+
+  @Patch(':id/packages/:packageId')
+  @Perm('productos.editar')
+  updatePackage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('packageId', ParseUUIDPipe) packageId: string,
+    @Body() body: unknown,
+    @CurrentActor() actor: Actor,
+  ) {
+    const { unitsPerPackage } = parse(packageSchema.pick({ unitsPerPackage: true }), body);
+    return this.skus.updatePackage(id, packageId, unitsPerPackage, actor);
+  }
+
+  @Delete(':id/packages/:packageId')
+  @Perm('productos.editar')
+  @HttpCode(200)
+  removePackage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('packageId', ParseUUIDPipe) packageId: string,
+    @CurrentActor() actor: Actor,
+  ) {
+    return this.skus.removePackage(id, packageId, actor);
   }
 
   @Put(':id/components')

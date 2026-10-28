@@ -20,6 +20,7 @@ export class DashboardController {
         total: sql<number>`count(*)::int`,
         activos: sql<number>`count(*) filter (where ${masterSkus.status} = 'ACTIVO')::int`,
         kits: sql<number>`count(*) filter (where ${masterSkus.isKit})::int`,
+        sinNombre: sql<number>`count(*) filter (where ${masterSkus.status} = 'ACTIVO' and upper(${masterSkus.name}) = upper(${masterSkus.skuCode}))::int`,
         sinPrecio: sql<number>`count(*) filter (where ${masterSkus.basePrice} is null and ${masterSkus.status} = 'ACTIVO')::int`,
         sinCodigo: sql<number>`count(*) filter (where ${masterSkus.status} = 'ACTIVO' and not exists (select 1 from sku_barcodes b where b.master_sku_id = "master_skus"."id"))::int`,
         sinPublicacion: sql<number>`count(*) filter (where ${masterSkus.status} = 'ACTIVO' and not exists (select 1 from channel_listings l where l.master_sku_id = "master_skus"."id" and l.valid_to is null))::int`,

@@ -11,12 +11,13 @@ import {
   priceHistory,
   products,
   skuBarcodes,
+  skuPackages,
   suppliers,
   warehouses,
   type Db,
   type DbOrTx,
 } from '@erp/db';
-import { barcodeSchema, kitComponentsSchema, skuCreateSchema, skuUpdateSchema, type ListQuery } from '@erp/shared';
+import { barcodeSchema, kitComponentsSchema, packageSchema, skuCreateSchema, skuUpdateSchema, type ListQuery } from '@erp/shared';
 import type { z } from 'zod';
 import { can, type Actor } from '../common/actor';
 import { InjectDb } from '../common/db';
@@ -32,6 +33,7 @@ export interface SkuFilters {
   channelId?: string;
   isKit?: boolean;
   withoutListings?: boolean;
+  withoutName?: boolean;
 }
 
 const IVA = 1.16;
@@ -67,6 +69,7 @@ export class SkusService {
           ilike(masterSkus.skuCode, p),
           ilike(masterSkus.name, p),
           sql`exists (select 1 from ${skuBarcodes} b where b.master_sku_id = "master_skus"."id" and b.barcode ilike ${p})`,
+          sql`exists (select 1 from ${skuPackages} k where k.master_sku_id = "master_skus"."id" and k.code ilike ${p})`,
           sql`exists (select 1 from ${channelListings} l where l.master_sku_id = "master_skus"."id" and (l.external_id ilike ${p} or l.external_sku ilike ${p} or l.fnsku ilike ${p}))`,
         )!,
       );
@@ -86,6 +89,7 @@ export class SkusService {
         sql`not exists (select 1 from ${channelListings} l where l.master_sku_id = "master_skus"."id" and l.valid_to is null)`,
       );
     }
+    if (f.withoutName) conds.push(sql`upper(${masterSkus.name}) = upper(${masterSkus.skuCode})`);
     const where = conds.length ? and(...conds) : undefined;
 
     const listingCount = sql<number>`(select count(*)::int from ${channelListings} l where l.master_sku_id = "master_skus"."id" and l.valid_to is null)`;
@@ -175,6 +179,7 @@ export class SkusService {
         product: { with: { brand: true, category: true } },
         preferredSupplier: { columns: { id: true, name: true, leadTimeDays: true } },
         barcodes: { orderBy: [desc(skuBarcodes.isPrimary), asc(skuBarcodes.createdAt)] },
+        packages: { orderBy: [asc(skuPackages.unitsPerPackage)] },
         components: {
           with: { component: { columns: { id: true, skuCode: true, name: true, status: true } } },
         },
@@ -366,6 +371,53 @@ export class SkusService {
         oldValues: { componentes: fmt(before) }, newValues: { componentes: fmt(after) },
       });
       return after;
+    });
+  }
+
+  async addPackage(id: string, input: z.infer<typeof packageSchema>, actor: Actor) {
+    return this.db.transaction(async (tx) => {
+      const sku = await this.lockSku(tx, id);
+      const code = input.code.toUpperCase();
+      const [asSku] = await tx.select({ skuCode: masterSkus.skuCode }).from(masterSkus).where(sql`upper(${masterSkus.skuCode}) = ${code}`);
+      if (asSku) throw new ConflictException(`${code} es el código de un SKU maestro.`);
+      const [row] = await tx.insert(skuPackages).values({ ...input, code, masterSkuId: id }).returning();
+      await this.audit.log(tx, actor, {
+        action: 'AGREGAR_EMPAQUE', module: 'productos', entity: 'master_skus', entityId: id,
+        summary: `Agregó la caja ${row.code} (${row.unitsPerPackage} piezas) al SKU ${sku.skuCode}`,
+        newValues: { code: row.code, type: row.type, unitsPerPackage: row.unitsPerPackage },
+      });
+      return row;
+    });
+  }
+
+  async updatePackage(id: string, packageId: string, units: number, actor: Actor) {
+    return this.db.transaction(async (tx) => {
+      const sku = await this.lockSku(tx, id);
+      const [before] = await tx.select().from(skuPackages).where(and(eq(skuPackages.id, packageId), eq(skuPackages.masterSkuId, id)));
+      if (!before) throw new NotFoundException('Empaque no encontrado.');
+      const [row] = await tx.update(skuPackages).set({ unitsPerPackage: units }).where(eq(skuPackages.id, packageId)).returning();
+      if (before.unitsPerPackage !== units) {
+        await this.audit.log(tx, actor, {
+          action: 'EDITAR_EMPAQUE', module: 'productos', entity: 'master_skus', entityId: id,
+          summary: `Cambió las piezas de la caja ${row.code} del SKU ${sku.skuCode}: ${before.unitsPerPackage} → ${units}`,
+          oldValues: { unitsPerPackage: before.unitsPerPackage }, newValues: { unitsPerPackage: units },
+        });
+      }
+      return row;
+    });
+  }
+
+  async removePackage(id: string, packageId: string, actor: Actor) {
+    return this.db.transaction(async (tx) => {
+      const sku = await this.lockSku(tx, id);
+      const [row] = await tx.delete(skuPackages).where(and(eq(skuPackages.id, packageId), eq(skuPackages.masterSkuId, id))).returning();
+      if (!row) throw new NotFoundException('Empaque no encontrado.');
+      await this.audit.log(tx, actor, {
+        action: 'QUITAR_EMPAQUE', module: 'productos', entity: 'master_skus', entityId: id,
+        summary: `Quitó la caja ${row.code} del SKU ${sku.skuCode}`,
+        oldValues: { code: row.code, unitsPerPackage: row.unitsPerPackage },
+      });
+      return { ok: true };
     });
   }
 

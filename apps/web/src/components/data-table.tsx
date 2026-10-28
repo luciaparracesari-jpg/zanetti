@@ -73,6 +73,8 @@ interface Props<T> {
   pageSizes?: number[];
   /** Parámetros de la URL que se reenvían a la API aunque no sean filtros de lista (p. ej. fechas). */
   urlParams?: string[];
+  /** false oculta la búsqueda y los filtros guardados (tablas cortas sin búsqueda en la API). */
+  searchable?: boolean;
 }
 
 const PAGE_SIZES = [25, 50, 100, 200];
@@ -111,6 +113,7 @@ export function DataTable<T>({
   emptyText = 'No hay registros con estos filtros.',
   pageSizes = PAGE_SIZES,
   urlParams = [],
+  searchable = true,
 }: Props<T>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -242,6 +245,7 @@ export function DataTable<T>({
     <div className="rounded border border-line bg-panel">
       {/* Barra de filtros */}
       <div className="flex flex-wrap items-end gap-2 border-b border-line p-2">
+        {searchable && (
         <form
           className="relative w-full sm:w-64"
           onSubmit={(e) => {
@@ -260,6 +264,7 @@ export function DataTable<T>({
             aria-label="Buscar"
           />
         </form>
+        )}
         {filters.map((f) => (
           <div key={f.key} className="w-[calc(50%-4px)] sm:w-auto sm:max-w-56 sm:min-w-40">
             <Select
@@ -289,6 +294,7 @@ export function DataTable<T>({
         )}
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           {toolbar}
+          {(searchable || filters.length > 0) && (
           <div className="relative">
             <Button size="sm" variant="secondary" icon={<Bookmark className="h-3.5 w-3.5" />} onClick={() => setSavedMenu((v) => !v)}>
               Filtros guardados
@@ -314,6 +320,7 @@ export function DataTable<T>({
               </div>
             )}
           </div>
+          )}
           <div className="relative">
             <Button size="sm" variant="secondary" icon={<Columns3 className="h-3.5 w-3.5" />} onClick={() => setColMenu((v) => !v)}>
               Columnas

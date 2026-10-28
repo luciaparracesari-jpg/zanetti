@@ -123,6 +123,7 @@ export function ListingDialog({
   async function onSubmit(v: FormValues) {
     setMsg(null);
     const common = {
+      externalId: v.externalId,
       externalSku: v.externalSku,
       fnsku: v.fnsku || null,
       unitsPerListing: Number(v.unitsPerListing || 1),
@@ -134,7 +135,7 @@ export function ListingDialog({
     };
     try {
       if (editing) await patch(`/listings/${listing!.id}`, common);
-      else await post('/listings', { ...common, channelId: v.channelId, masterSkuId: v.masterSkuId, externalId: v.externalId });
+      else await post('/listings', { ...common, channelId: v.channelId, masterSkuId: v.masterSkuId });
       toast.ok(editing ? 'Publicación actualizada.' : 'Publicación ligada al SKU.');
       qc.invalidateQueries({ queryKey: ['/listings'] });
       qc.invalidateQueries({ queryKey: ['sku'] });
@@ -194,7 +195,7 @@ export function ListingDialog({
           )}
         </Field>
         <Field label="Código externo" required hint={hint?.id} error={err.externalId?.message}>
-          <Input {...register('externalId')} disabled={editing} className="font-mono" />
+          <Input {...register('externalId')} className="font-mono" />
         </Field>
         <Field label="SKU externo" hint={hint?.sku} error={err.externalSku?.message}>
           <Input {...register('externalSku')} className="font-mono" />

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { FileSpreadsheet, Plus } from 'lucide-react';
 import { SKU_STATUS } from '@erp/shared';
 import { patch } from '@/lib/api';
 import { fmtCost, fmtMoney, fmtPct } from '@/lib/format';
@@ -105,6 +105,9 @@ export default function SkusPage() {
         subtitle="Entidad central: cada publicación de cualquier canal apunta a un SKU maestro o a un kit."
         actions={
           <Can perm="productos.crear">
+            <Link href="/importar?plantilla=skus">
+              <Button icon={<FileSpreadsheet className="h-4 w-4" />}>Importar desde Excel</Button>
+            </Link>
             <Link href="/productos/skus/nuevo">
               <Button variant="primary" icon={<Plus className="h-4 w-4" />}>
                 Nuevo SKU
@@ -128,6 +131,7 @@ export default function SkusPage() {
           { key: 'channelId', label: 'Canal', options: channels },
           { key: 'isKit', label: 'Tipo', options: [{ value: 'false', label: 'Simple' }, { value: 'true', label: 'Kit' }] },
           { key: 'withoutListings', label: 'Publicación', options: [{ value: 'true', label: 'Sin publicación vigente' }] },
+          { key: 'withoutName', label: 'Nombre', options: [{ value: 'true', label: 'Sin nombre' }] },
         ]}
         bulkActions={
           can('productos.editar')

@@ -1,6 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { and, asc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
-import { channelListings, channels, masterSkus, products, skuBarcodes, suppliers, warehouses, type Db } from '@erp/db';
+import { channelListings, channels, masterSkus, products, skuBarcodes, skuPackages, suppliers, warehouses, type Db } from '@erp/db';
 import { AuthOnly } from '../auth/decorators';
 import { can, CurrentActor, type Actor } from '../common/actor';
 import { InjectDb } from '../common/db';
@@ -41,7 +41,8 @@ export class SearchController {
         .selectDistinct({ id: masterSkus.id, skuCode: masterSkus.skuCode, name: masterSkus.name, status: masterSkus.status })
         .from(masterSkus)
         .leftJoin(skuBarcodes, eq(skuBarcodes.masterSkuId, masterSkus.id))
-        .where(or(ilike(masterSkus.skuCode, p), ilike(masterSkus.name, p), eq(skuBarcodes.barcode, q)))
+        .leftJoin(skuPackages, eq(skuPackages.masterSkuId, masterSkus.id))
+        .where(or(ilike(masterSkus.skuCode, p), ilike(masterSkus.name, p), eq(skuBarcodes.barcode, q), ilike(skuPackages.code, p)))
         .orderBy(asc(masterSkus.skuCode))
         .limit(LIMIT);
       if (skus.length) {

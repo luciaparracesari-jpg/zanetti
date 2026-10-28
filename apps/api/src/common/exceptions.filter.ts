@@ -37,6 +37,8 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   kit_components_self_ck: 'Un kit no puede contenerse a sí mismo.',
   master_skus_minmax_ck: 'El mínimo no puede ser mayor que el máximo.',
   saved_filters_uq: 'Ya tienes un filtro guardado con ese nombre.',
+  sku_packages_code_uq: 'Ese código de caja ya está registrado.',
+  sku_packages_units_ck: 'Las piezas por caja deben ser mayores que 0.',
 };
 
 function findPgError(err: unknown): PgLikeError | undefined {

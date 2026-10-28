@@ -8,7 +8,7 @@ import { fmtDateTime, fmtInt } from '@/lib/format';
 import { ErrorBox, PageHeader, Panel, Spinner, Stat, StatusBadge } from '@/components/ui';
 
 interface Summary {
-  skus: { total: number; activos: number; kits: number; sinPrecio: number; sinCodigo: number; sinPublicacion: number };
+  skus: { total: number; activos: number; kits: number; sinNombre: number; sinPrecio: number; sinCodigo: number; sinPublicacion: number };
   productos: number;
   codigosSinMapear: number;
   publicacionesPorCanal: { code: string; name: string; status: string; publicaciones: number }[];
@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const pendientes = [
     { label: 'Códigos externos sin mapear', n: d.codigosSinMapear, href: '/productos/sin-mapear' },
     { label: 'SKU activos sin código de barras', n: d.skus.sinCodigo, href: '/productos/skus?status=ACTIVO' },
+    { label: 'SKU activos sin nombre', n: d.skus.sinNombre, href: '/productos/skus?status=ACTIVO&withoutName=true' },
     { label: 'SKU activos sin precio de lista', n: d.skus.sinPrecio, href: '/productos/skus?status=ACTIVO&sort=basePrice:desc' },
     { label: 'SKU activos sin publicación vigente', n: d.skus.sinPublicacion, href: '/productos/skus?status=ACTIVO&withoutListings=true' },
   ];

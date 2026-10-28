@@ -26,3 +26,7 @@ export const listingStatus = pgEnum('listing_status', ['ACTIVA', 'PAUSADA', 'INA
 export const feeType = pgEnum('fee_type', ['COMISION', 'ENVIO', 'ALMACENAJE', 'OTRO']);
 export const feeBase = pgEnum('fee_base', ['VENTA_CON_IVA', 'VENTA_NETA', 'DESPUES_DESCUENTO']);
 export const unmappedStatus = pgEnum('unmapped_status', ['PENDIENTE', 'MAPEADO', 'IGNORADO']);
+export const packageType = pgEnum('package_type', ['CAJA_MASTER', 'CAJA_INTERIOR', 'TARIMA']);
+export const importBatchStatus = pgEnum('import_batch_status', ['VALIDADO', 'APLICADO', 'CANCELADO']);
+export const importRowStatus = pgEnum('import_row_status', ['VALIDO', 'ADVERTENCIA', 'ERROR', 'OMITIDO']);
+export const importRowAction = pgEnum('import_row_action', ['CREAR', 'ACTUALIZAR', 'SIN_CAMBIOS']);

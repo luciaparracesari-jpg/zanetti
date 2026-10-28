@@ -9,6 +9,7 @@ import {
   FULFILLMENT_MODEL,
   LISTING_STATUS,
   LOCATION_TYPE,
+  PACKAGE_TYPE,
   RECORD_STATUS,
   SKU_STATUS,
   USER_STATUS,
@@ -203,6 +204,22 @@ export const barcodeSchema = z
     }
   });
 
+export const packageSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{1,59}$/, 'Letras, números, punto, guion o guion bajo'),
+  type: z.enum(keysOf(PACKAGE_TYPE)).default('CAJA_MASTER'),
+  unitsPerPackage: z.coerce.number().int('Debe ser entero').min(1, 'Mínimo 1').max(100_000),
+});
+
+export const importRowPatchSchema = z
+  .object({
+    values: z.record(z.string(), z.union([z.string().max(500), z.null()])).optional(),
+    skipped: z.boolean().optional(),
+  })
+  .refine((v) => v.values !== undefined || v.skipped !== undefined, { message: 'Nada que actualizar' });
+
 export const kitComponentsSchema = z.object({
   components: z
     .array(z.object({ componentSkuId: id(), quantity: z.coerce.number().int().min(1).max(10_000) }))
@@ -247,6 +264,8 @@ export const listingSchema = z
   });
 
 export const listingUpdateSchema = z.object({
+  /** Se puede corregir (p. ej. capturar el artículo de Liverpool de una oferta Vendor “OF22”). */
+  externalId: trimmed(80).optional(),
   externalSku: z.string().trim().max(120).optional(),
   fnsku: optText(40),
   unitsPerListing: z.coerce.number().int().min(1).max(1000).optional(),

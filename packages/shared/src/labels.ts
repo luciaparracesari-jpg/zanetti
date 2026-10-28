@@ -50,3 +50,8 @@ export const UNMAPPED_STATUS = { PENDIENTE: 'Pendiente', MAPEADO: 'Mapeado', IGN
 
 export type LabelMap = Record<string, string>;
 export const keysOf = <T extends LabelMap>(m: T) => Object.keys(m) as [keyof T & string, ...(keyof T & string)[]];
+
+export const PACKAGE_TYPE = { CAJA_MASTER: 'Caja master', CAJA_INTERIOR: 'Caja interior', TARIMA: 'Tarima' } as const;
+export const IMPORT_ROW_STATUS = { VALIDO: 'Válido', ADVERTENCIA: 'Con advertencia', ERROR: 'Con error', OMITIDO: 'Omitido' } as const;
+export const IMPORT_ROW_ACTION = { CREAR: 'Crear', ACTUALIZAR: 'Actualizar', SIN_CAMBIOS: 'Sin cambios' } as const;
+export const IMPORT_BATCH_STATUS = { VALIDADO: 'Por confirmar', APLICADO: 'Aplicado', CANCELADO: 'Cancelado' } as const;

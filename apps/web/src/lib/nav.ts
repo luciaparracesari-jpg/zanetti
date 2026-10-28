@@ -58,6 +58,7 @@ export const NAV: NavSection[] = [
       { label: 'Catálogo', href: '/productos/catalogo', perm: 'productos.ver' },
       { label: 'Publicaciones', href: '/productos/publicaciones', perm: 'canales.ver' },
       { label: 'Códigos sin mapear', href: '/productos/sin-mapear', perm: 'canales.ver' },
+      { label: 'Importar desde Excel', href: '/importar?plantilla=skus', perm: 'productos.crear' },
       { label: 'Categorías', href: '/productos/categorias', perm: 'productos.ver' },
       { label: 'Marcas', href: '/productos/marcas', perm: 'productos.ver' },
     ],

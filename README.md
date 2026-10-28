@@ -4,7 +4,7 @@ Plataforma ERP web para administrar un negocio de ecommerce multicanal en Méxic
 
 Diseño completo (arquitectura, modelo de datos, APIs, roles, flujos, wireframes y roadmap): documento **“ERP Ecommerce — Diseño del sistema”** en el proyecto Zanetti de Claude. Las decisiones técnicas que cambiaron respecto al diseño están en [`docs/decisiones.md`](docs/decisiones.md).
 
-## Estado: entrega 1 de 6 del MVP
+## Estado: entrega 1 de 6 del MVP + importación de catálogo
 
 | Incluido en la entrega 1 | Llega después |
 | --- | --- |
@@ -17,6 +17,26 @@ Diseño completo (arquitectura, modelo de datos, APIs, roles, flujos, wireframes
 | Cola de códigos sin mapear | Fase 3: importaciones, costo puesto en almacén, rentabilidad |
 | Almacenes y ubicaciones: APLIN (propio), Amazon FBA, Liverpool FBL, Liverpool 99 Minutos | Fase 4: finanzas y CFDI |
 | Proveedores (ficha básica), búsqueda global (Ctrl K), tablas con filtros guardados, columnas configurables, exportación CSV | |
+| Importación desde Excel/CSV con vista previa, corrección y confirmación; cajas master por SKU | |
+
+## Importar el catálogo desde Excel
+
+Menú **Productos → Importar desde Excel** (o el botón en SKU maestros):
+
+1. Elige el tipo de información y, si hace falta, descarga la plantilla (trae una hoja de instrucciones).
+2. Carga el archivo `.xlsx` o `.csv` (hasta 5 MB y 5,000 renglones). El encabezado puede estar en cualquiera de los primeros 20 renglones y las columnas pueden venir en cualquier orden.
+3. Revisa la vista previa: cada renglón dice si es válido, tiene advertencias o errores, y qué se hará (crear o actualizar). Haz clic en un renglón para corregirlo u omítelo.
+4. Confirma. Todo se aplica en una sola transacción; si algo cambió desde la vista previa, se revalida y no se importa nada con errores.
+
+La plantilla **SKU maestro y publicaciones** reconoce el formato de `ERP_ZANETTI.xlsx` (SKU MAESTRO, ID LIVERPOOL FBL/99 MIN, ID LIVERPOOL VENDOR, ASIN AMAZON, UPC-EAN, SKU CAJA MASTER, PIEZAS CAJA MASTER) y columnas opcionales: NOMBRE, PRODUCTO, MARCA, CATEGORIA, SKU AMAZON, SHOPIFY VARIANT ID, SKU SHOPIFY, PRECIO LISTA y COSTO. Reimportar el mismo archivo no duplica nada: sólo agrega lo que falta.
+
+| Columna | Se registra como |
+| --- | --- |
+| ASIN AMAZON | Publicación de Amazon con stock en Amazon FBA; si el SKU empieza con X00 también se guarda como FNSKU |
+| ID LIVERPOOL FBL/99 MIN | Publicación de Liverpool con stock en Liverpool FBL (o 99 Minutos si el código contiene “99”); el número inicial es el artículo |
+| ID LIVERPOOL VENDOR | Publicación de Liverpool surtida desde la bodega APLIN; si no trae número de artículo (p. ej. `OF22`) se registra con el SKU de oferta y el artículo se captura después |
+| UPC-EAN | Código de barras principal (UPC 12 o EAN-13 con dígito verificador) |
+| SKU CAJA MASTER + PIEZAS | Caja master del SKU, que se encuentra con la búsqueda global |
 
 ## Stack
 
@@ -70,7 +90,9 @@ ADMIN_EMAIL=admin@zanetti.mx ADMIN_PASSWORD='<contraseña actual>' ADMIN_NEW_PAS
 DATABASE_URL=postgresql://erp:erp@localhost:5432/erp pnpm test
 ```
 
-Cubren: CSRF, credenciales, sesión, cambio obligatorio de contraseña, catálogo, kits (y rechazo de kit dentro de kit), EAN-13 con dígito verificador, publicaciones con almacén del canal correcto, código externo único vigente, baja y re-ligado, comisiones sin traslape, permisos del rol Consulta (sin costos, sin crear, sin exportar), último Administrador protegido y auditoría inmutable. El flujo de GitHub Actions (`.github/workflows/ci.yml`) las corre en cada push.
+`test/imports.test.mjs` cubre la importación: encabezado en el segundo renglón, espacios invisibles, duplicados, dígito verificador, corrección y omisión de renglones, bloqueo con errores, aplicación, reimportación sin duplicar y conflictos con datos existentes.
+
+Las demás pruebas cubren: CSRF, credenciales, sesión, cambio obligatorio de contraseña, catálogo, kits (y rechazo de kit dentro de kit), EAN-13 con dígito verificador, publicaciones con almacén del canal correcto, código externo único vigente, baja y re-ligado, comisiones sin traslape, permisos del rol Consulta (sin costos, sin crear, sin exportar), último Administrador protegido y auditoría inmutable. El flujo de GitHub Actions (`.github/workflows/ci.yml`) las corre en cada push.
 
 ## Despliegue en el VPS
 

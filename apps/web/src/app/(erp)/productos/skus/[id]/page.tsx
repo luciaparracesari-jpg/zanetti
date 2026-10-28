@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Star, Trash2 } from 'lucide-react';
-import { BARCODE_TYPE, FULFILLMENT_MODEL, LISTING_STATUS, SKU_STATUS } from '@erp/shared';
-import { del, get, post, put, qs, type Paged } from '@/lib/api';
+import { BARCODE_TYPE, FULFILLMENT_MODEL, LISTING_STATUS, PACKAGE_TYPE, SKU_STATUS } from '@erp/shared';
+import { del, get, patch, post, put, qs, type Paged } from '@/lib/api';
 import { fmtCost, fmtDate, fmtDateTime, fmtDims, fmtMoney, fmtPct, fmtWeight } from '@/lib/format';
 import { Can, useSession } from '@/lib/session';
 import { AsyncCombobox } from '@/components/combobox';
@@ -16,12 +16,14 @@ import { useToast } from '@/components/toast';
 import { Badge, Button, Empty, ErrorBox, Field, Input, PageHeader, Panel, Select, Spinner, Stat, StatusBadge, Tabs } from '@/components/ui';
 
 interface Barcode { id: string; barcode: string; type: string; isPrimary: boolean; createdAt: string }
+interface Pack { id: string; code: string; type: string; unitsPerPackage: number; createdAt: string }
 interface KitRow { quantity: number; component?: { id: string; skuCode: string; name: string; status: string }; kit?: { id: string; skuCode: string; name: string; status: string } }
 interface SkuListing extends ListingRow { channelCode: string; channelName: string; warehouseCode: string | null; validFrom: string; validTo: string | null }
 interface Full extends SkuDetail {
   product: { id: string; name: string; brand: { name: string } | null; category: { name: string } | null };
   preferredSupplier: { id: string; name: string; leadTimeDays: number | null } | null;
   barcodes: Barcode[];
+  packages: Pack[];
   components: (KitRow & { componentSkuId: string })[];
   usedInKits: KitRow[];
   listings: SkuListing[];
@@ -89,7 +91,7 @@ export default function SkuPage({ params }: { params: Promise<{ id: string }> })
         onChange={setTab}
         tabs={[
           { value: 'general', label: 'General' },
-          { value: 'codigos', label: `Códigos de barras (${s.barcodes.length})` },
+          { value: 'codigos', label: `Códigos y cajas (${s.barcodes.length + s.packages.length})` },
           { value: 'componentes', label: s.isKit ? `Componentes (${s.components.length})` : `Usado en kits (${s.usedInKits.length})` },
           { value: 'publicaciones', label: `Publicaciones (${vigentes.length})` },
           { value: 'precios', label: 'Precios y costos' },
@@ -110,7 +112,12 @@ export default function SkuPage({ params }: { params: Promise<{ id: string }> })
           />
         </div>
       )}
-      {tab === 'codigos' && <BarcodesTab sku={s} />}
+      {tab === 'codigos' && (
+        <div className="flex flex-col gap-3">
+          <BarcodesTab sku={s} />
+          <PackagesPanel sku={s} />
+        </div>
+      )}
       {tab === 'componentes' && <ComponentsTab sku={s} />}
       {tab === 'publicaciones' && <ListingsTab sku={s} />}
       {tab === 'precios' && <PricesTab sku={s} />}
@@ -197,6 +204,92 @@ function BarcodesTab({ sku }: { sku: Full }) {
                     )}
                     <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => confirm(`¿Quitar el código ${b.barcode}?`) && remove.mutate(b.id)}>Quitar</Button>
                   </Can>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Panel>
+  );
+}
+
+function PackagesPanel({ sku }: { sku: Full }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { can } = useSession();
+  const [code, setCode] = useState(`${sku.skuCode}-C`);
+  const [type, setType] = useState('CAJA_MASTER');
+  const [units, setUnits] = useState('');
+  const [editing, setEditing] = useState<Record<string, string>>({});
+  const refresh = () => qc.invalidateQueries({ queryKey: ['sku', sku.id] });
+  const add = useMutation({
+    mutationFn: () => post(`/skus/${sku.id}/packages`, { code, type, unitsPerPackage: units }),
+    onSuccess: () => { toast.ok('Caja agregada.'); setUnits(''); refresh(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const save = useMutation({
+    mutationFn: ({ pid, u }: { pid: string; u: string }) => patch(`/skus/${sku.id}/packages/${pid}`, { unitsPerPackage: u }),
+    onSuccess: (_d, v) => { toast.ok('Piezas actualizadas.'); setEditing((e) => { const n = { ...e }; delete n[v.pid]; return n; }); refresh(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const remove = useMutation({
+    mutationFn: (pid: string) => del(`/skus/${sku.id}/packages/${pid}`),
+    onSuccess: () => { toast.ok('Caja eliminada.'); refresh(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const editable = can('productos.editar');
+  return (
+    <Panel title="Cajas y empaques" bodyClassName="p-0">
+      <p className="border-b border-line px-3 py-2 text-xs text-ink-soft">El código de la caja identifica la caja en recepciones y envíos a Amazon FBA o Liverpool; se encuentra con la búsqueda global.</p>
+      {editable && (
+        <form className="flex flex-wrap items-end gap-2 border-b border-line p-3" onSubmit={(e) => { e.preventDefault(); add.mutate(); }}>
+          <Field label="Código de la caja" className="w-56">
+            <Input value={code} onChange={(e) => setCode(e.target.value.trim())} className="font-mono uppercase" />
+          </Field>
+          <Field label="Tipo" className="w-40">
+            <Select value={type} onChange={(e) => setType(e.target.value)}>
+              {Object.entries(PACKAGE_TYPE).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </Select>
+          </Field>
+          <Field label="Piezas" className="w-24">
+            <Input inputMode="numeric" value={units} onChange={(e) => setUnits(e.target.value)} className="num" />
+          </Field>
+          <Button type="submit" variant="primary" icon={<Plus className="h-3.5 w-3.5" />} loading={add.isPending} disabled={!code || !units}>Agregar</Button>
+        </form>
+      )}
+      {sku.packages.length === 0 ? (
+        <Empty>Sin cajas registradas.</Empty>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="bg-page text-xs text-ink-soft">
+            <tr><th className="px-3 py-1.5 text-left">Código</th><th className="px-3 py-1.5 text-left">Tipo</th><th className="px-3 py-1.5 text-right">Piezas</th><th /></tr>
+          </thead>
+          <tbody>
+            {sku.packages.map((p) => (
+              <tr key={p.id} className="border-t border-line">
+                <td className="px-3 py-1.5 font-mono">{p.code}</td>
+                <td className="px-3 py-1.5">{PACKAGE_TYPE[p.type as keyof typeof PACKAGE_TYPE]}</td>
+                <td className="num px-3 py-1.5">
+                  {p.id in editing ? (
+                    <Input value={editing[p.id]} onChange={(e) => setEditing({ ...editing, [p.id]: e.target.value })} className="ml-auto w-20 num" autoFocus />
+                  ) : (
+                    p.unitsPerPackage
+                  )}
+                </td>
+                <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                  {editable &&
+                    (p.id in editing ? (
+                      <>
+                        <Button size="sm" variant="primary" onClick={() => save.mutate({ pid: p.id, u: editing[p.id] })}>Guardar</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditing((e) => { const n = { ...e }; delete n[p.id]; return n; })}>Cancelar</Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button size="sm" variant="ghost" onClick={() => setEditing({ ...editing, [p.id]: String(p.unitsPerPackage) })}>Cambiar piezas</Button>
+                        <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => confirm(`¿Quitar la caja ${p.code}?`) && remove.mutate(p.id)}>Quitar</Button>
+                      </>
+                    ))}
                 </td>
               </tr>
             ))}

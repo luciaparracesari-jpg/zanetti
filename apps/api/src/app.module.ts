@@ -17,6 +17,8 @@ import { ChannelsController } from './channels/channels.controller';
 import { ListingsController } from './channels/listings.controller';
 import { DbModule } from './common/db';
 import { HealthController } from './misc/health.controller';
+import { ImportsController } from './imports/imports.controller';
+import { ImportsService } from './imports/imports.service';
 import { DashboardController } from './misc/dashboard.controller';
 import { SavedFiltersController } from './misc/saved-filters.controller';
 import { SearchController } from './misc/search.controller';
@@ -49,12 +51,14 @@ import { WarehousesController } from './warehouses/warehouses.controller';
     DashboardController,
     SavedFiltersController,
     SettingsController,
+    ImportsController,
   ],
   providers: [
     AuditService,
     SessionService,
     AuthService,
     SkusService,
+    ImportsService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

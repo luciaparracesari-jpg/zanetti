@@ -12,6 +12,7 @@ import {
   products,
   skuAttributeValues,
   skuBarcodes,
+  skuPackages,
   suppliers,
 } from './catalog';
 import {
@@ -114,6 +115,7 @@ export const masterSkusRelations = relations(masterSkus, ({ one, many }) => ({
     references: [suppliers.id],
   }),
   barcodes: many(skuBarcodes),
+  packages: many(skuPackages),
   components: many(kitComponents, { relationName: 'kitParent' }),
   usedInKits: many(kitComponents, { relationName: 'kitComponent' }),
   listings: many(channelListings),
@@ -212,4 +214,8 @@ export const unmappedCodesRelations = relations(unmappedCodes, ({ one }) => ({
     fields: [unmappedCodes.resolvedListingId],
     references: [channelListings.id],
   }),
+}));
+
+export const skuPackagesRelations = relations(skuPackages, ({ one }) => ({
+  masterSku: one(masterSkus, { fields: [skuPackages.masterSkuId], references: [masterSkus.id] }),
 }));

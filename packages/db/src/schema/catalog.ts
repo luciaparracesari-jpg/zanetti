@@ -14,7 +14,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { createdAt, pk, tsz, updatedAt } from './_columns';
-import { barcodeType, costMethod, recordStatus, skuStatus } from './enums';
+import { barcodeType, costMethod, packageType, recordStatus, skuStatus } from './enums';
 import { channels } from './channels';
 
 export const brands = pgTable(
@@ -244,4 +244,28 @@ export const costHistory = pgTable(
     changedById: uuid(),
   },
   (t) => [index('cost_history_sku_idx').on(t.masterSkuId, t.validFrom)],
+);
+
+/**
+ * Empaques del SKU (caja master, caja interior, tarima). El código del empaque identifica la caja
+ * en recepciones y envíos a FBA/FBL; `units_per_package` dice cuántas piezas trae.
+ */
+export const skuPackages = pgTable(
+  'sku_packages',
+  {
+    id: pk(),
+    masterSkuId: uuid()
+      .notNull()
+      .references(() => masterSkus.id, { onDelete: 'cascade' }),
+    code: text().notNull(),
+    type: packageType().notNull().default('CAJA_MASTER'),
+    unitsPerPackage: integer().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('sku_packages_code_uq').on(sql`upper(code)`),
+    index('sku_packages_sku_idx').on(t.masterSkuId),
+    index('sku_packages_code_trgm').using('gin', sql`code gin_trgm_ops`),
+    check('sku_packages_units_ck', sql`units_per_package > 0`),
+  ],
 );
