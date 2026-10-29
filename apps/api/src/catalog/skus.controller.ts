@@ -38,8 +38,8 @@ export class SkusController {
 
   @Get('options')
   @Perm('productos.ver')
-  options(@Query('q') q?: string, @Query('excludeKits') excludeKits?: string) {
-    return this.skus.options(q, excludeKits === 'true');
+  options(@Query('q') q?: string, @Query('excludeKits') excludeKits?: string, @Query('onlyKits') onlyKits?: string) {
+    return this.skus.options(q, excludeKits === 'true', onlyKits === 'true');
   }
 
   @Get(':id')

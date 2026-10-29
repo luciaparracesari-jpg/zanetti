@@ -1,20 +1,23 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeftRight, ClipboardCheck, FileUp, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeftRight, ClipboardCheck, FileUp, Layers, SlidersHorizontal } from 'lucide-react';
 import { SKU_STATUS, STOCK_FILTER } from '@erp/shared';
 import { fmtCost, fmtInt, fmtMoney } from '@/lib/format';
 import { useWarehouses } from '@/lib/inventory';
 import { Can, useSession } from '@/lib/session';
 import { DataTable, optionsFrom, type Column } from '@/components/data-table';
 import { StockQty, TotalsBar } from '@/components/inventory';
-import { Button, PageHeader } from '@/components/ui';
+import { KitAssemblyDialog } from '@/components/kit-assembly-dialog';
+import { Badge, Button, PageHeader } from '@/components/ui';
 
 interface Row {
   id: string;
   skuCode: string;
   name: string;
   status: string;
+  isKit: boolean;
   productName: string;
   brandName: string | null;
   onHand: number;
@@ -40,6 +43,7 @@ export default function StockPage() {
   const { can } = useSession();
   const whs = useWarehouses();
   const costs = can('costos.ver');
+  const [kitOpen, setKitOpen] = useState(false);
 
   const whCols: Column<Row>[] = (whs.data ?? []).map((w) => ({
     id: `wh-${w.code}`,
@@ -59,7 +63,18 @@ export default function StockPage() {
   }));
 
   const columns: Column<Row>[] = [
-    { id: 'sku', header: 'SKU maestro', sortKey: 'skuCode', cell: (r) => <span className="font-mono">{r.skuCode}</span>, csv: (r) => r.skuCode },
+    {
+      id: 'sku',
+      header: 'SKU maestro',
+      sortKey: 'skuCode',
+      cell: (r) => (
+        <span className="font-mono">
+          {r.skuCode}
+          {r.isKit && <Badge tone="info" className="ml-1 font-sans">kit armado</Badge>}
+        </span>
+      ),
+      csv: (r) => r.skuCode,
+    },
     { id: 'name', header: 'Nombre', sortKey: 'name', cell: (r) => <span className="line-clamp-1">{r.name}</span>, csv: (r) => r.name },
     { id: 'brand', header: 'Marca', cell: (r) => r.brandName ?? '—', csv: (r) => r.brandName, defaultHidden: true },
     ...whCols,
@@ -100,6 +115,7 @@ export default function StockPage() {
             <Can perm="transferencias.crear">
               <Link href="/inventario/transferencias/nueva"><Button icon={<ArrowLeftRight className="h-4 w-4" />}>Transferencia</Button></Link>
               <Link href="/inventario/conteos?nuevo=1"><Button icon={<ClipboardCheck className="h-4 w-4" />}>Conteo</Button></Link>
+              <Button icon={<Layers className="h-4 w-4" />} onClick={() => setKitOpen(true)}>Armar kits</Button>
             </Can>
             {can('ajustes.autorizar') && can('costos.ver') && (
               <Link href="/importar?plantilla=inventario-inicial"><Button icon={<FileUp className="h-4 w-4" />}>Inventario inicial</Button></Link>
@@ -140,6 +156,7 @@ export default function StockPage() {
           );
         }}
       />
+      <KitAssemblyDialog open={kitOpen} onClose={() => setKitOpen(false)} />
     </>
   );
 }

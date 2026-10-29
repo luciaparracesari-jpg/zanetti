@@ -160,7 +160,9 @@ export default function ImportBatchPage({ params }: { params: Promise<{ id: stri
               .map((k) => <Stat key={k} label={RESULT_LABELS[k]} value={fmtInt(b.result![k])} />)}
           </div>
           <div className="mt-3 flex gap-2">
-            {b.template.key === 'inventario-inicial' ? (
+            {b.template.key === 'kits' ? (
+              <Link href="/productos/skus?isKit=true"><Button variant="primary">Ver kits</Button></Link>
+            ) : b.template.key === 'inventario-inicial' ? (
               <>
                 <Link href="/inventario"><Button variant="primary">Ver existencias</Button></Link>
                 <Link href={`/inventario/movimientos?documentId=${b.id}`}><Button>Ver movimientos</Button></Link>

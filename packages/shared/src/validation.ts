@@ -521,3 +521,13 @@ export const relocationSchema = z
     notes: optText(500),
   })
   .refine((v) => v.fromLocationId !== v.toLocationId, { path: ['toLocationId'], message: 'Elige una ubicación distinta' });
+
+export const kitAssemblySchema = z.object({
+  kitId: id(),
+  warehouseId: id(),
+  qty: qtyInt(),
+  mode: z.enum(['ARMAR', 'DESARMAR']),
+  locationId: optId(),
+  notes: optText(500),
+  authorizeNegative: z.boolean().optional().default(false),
+});

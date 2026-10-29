@@ -192,7 +192,6 @@ export class TransfersService {
     const lines = data.items.map((it, i) => {
       const s = skus.get(it.masterSkuId);
       if (!s) errors.push({ path: `items.${i}.masterSkuId`, message: 'SKU no encontrado' });
-      else if (s.isKit) errors.push({ path: `items.${i}.masterSkuId`, message: 'Un kit no se transfiere; agrega sus componentes' });
       let qty = it.qtyRequested ?? 0;
       if (it.packageId) {
         const p = pkgs.find((x) => x.id === it.packageId);

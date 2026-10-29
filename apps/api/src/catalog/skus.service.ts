@@ -157,13 +157,14 @@ export class SkusService {
     return { items, total, page: lq.page, pageSize: lq.pageSize };
   }
 
-  async options(q: string | undefined, excludeKits: boolean) {
+  async options(q: string | undefined, excludeKits: boolean, onlyKits = false) {
     const conds: SQL[] = [inArray(masterSkus.status, ['ACTIVO', 'BORRADOR'])];
     if (q?.trim()) {
       const p = likePattern(q.trim());
       conds.push(or(ilike(masterSkus.skuCode, p), ilike(masterSkus.name, p))!);
     }
     if (excludeKits) conds.push(eq(masterSkus.isKit, false));
+    if (onlyKits) conds.push(eq(masterSkus.isKit, true));
     return this.db
       .select({ id: masterSkus.id, skuCode: masterSkus.skuCode, name: masterSkus.name, isKit: masterSkus.isKit })
       .from(masterSkus)
@@ -267,6 +268,11 @@ export class SkusService {
       if (input.isKit === true && !before.isKit) {
         const [{ n }] = await tx.select({ n: countSql }).from(kitComponents).where(eq(kitComponents.componentSkuId, id));
         if (n > 0) throw new ConflictException('Este SKU es componente de un kit; no puede ser kit a la vez.');
+        // Un kit no tiene existencia propia: convertirlo con piezas en almacén las dejaría huérfanas.
+        const [{ stock }] = (
+          await tx.execute<{ stock: number }>(sql`SELECT coalesce(sum(abs(qty)), 0)::int AS stock FROM inventory_balances WHERE master_sku_id = ${id}::uuid`)
+        ).rows;
+        if (Number(stock) > 0) throw new ConflictException('El SKU tiene existencia; ajústala a 0 antes de convertirlo en kit.');
       }
 
       const [row] = await tx

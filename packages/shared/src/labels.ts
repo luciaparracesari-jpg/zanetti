@@ -80,6 +80,7 @@ export const MOVEMENT_DOCUMENT = {
   CONTEO: 'Conteo físico',
   IMPORTACION: 'Importación',
   REUBICACION: 'Reubicación',
+  ARMADO_KIT: 'Armado de kits',
 } as const;
 export const LOT_COST_STATUS = { PROVISIONAL: 'Provisional', FINAL: 'Final' } as const;
 export const TRANSFER_STATUS = {

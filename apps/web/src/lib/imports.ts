@@ -71,6 +71,10 @@ export const RESULT_LABELS: Record<string, string> = {
   piezas: 'Piezas cargadas',
   lotes: 'Lotes',
   movimientos: 'Movimientos de inventario',
+  kitsCreados: 'Kits creados',
+  kitsActualizados: 'Kits definidos',
+  componentes: 'Componentes',
+  fnskuGuardados: 'FNSKU guardados',
 };
 
 /** Resumen de una línea de lo que hará el renglón. */

@@ -24,10 +24,10 @@ const IN_TYPES = new Set<MovementType>([
   'DEVOLUCION_CLIENTE',
   'AJUSTE_ENTRADA',
   'TRANSFER_ENTRADA',
-  'DESARMADO_KIT',
 ]);
-const OUT_TYPES = new Set<MovementType>(['SALIDA_VENTA', 'DEVOLUCION_PROVEEDOR', 'AJUSTE_SALIDA', 'TRANSFER_SALIDA', 'ARMADO_KIT']);
-const SIGNED_TYPES = new Set<MovementType>(['CONTEO_AJUSTE']);
+const OUT_TYPES = new Set<MovementType>(['SALIDA_VENTA', 'DEVOLUCION_PROVEEDOR', 'AJUSTE_SALIDA', 'TRANSFER_SALIDA']);
+/** Armar: salen componentes y entra el kit. Desarmar: sale el kit y entran componentes. */
+const SIGNED_TYPES = new Set<MovementType>(['CONTEO_AJUSTE', 'ARMADO_KIT', 'DESARMADO_KIT']);
 
 /** Ubicaciones cuyo stock no se vende ni se envía; sólo salen si se pide la ubicación explícitamente. */
 export const BLOCKED_LOCATION_TYPES = ['CUARENTENA', 'MERMA'] as const;
@@ -115,12 +115,8 @@ async function loadSku(tx: DbOrTx, id: string): Promise<SkuCtx> {
     .from(masterSkus)
     .where(eq(masterSkus.id, id));
   if (!s) throw new InventoryError('SKU_NO_ENCONTRADO', 'El SKU no existe.');
-  if (s.isKit)
-    throw new InventoryError(
-      'SKU_ES_KIT',
-      `${s.skuCode} es un kit: su existencia se calcula con sus componentes. Mueve los componentes.`,
-      { skuCode: s.skuCode },
-    );
+  // Un kit sólo tiene existencia física cuando ya está armado (por ejemplo, bundles enviados a FBA o FBL);
+  // en bodega propia su disponible además se calcula con los componentes.
   return s;
 }
 

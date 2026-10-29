@@ -9,15 +9,15 @@ import {
   warehouses,
   type Db,
 } from '@erp/db';
-import { refreshAvgCost, relocate } from '@erp/domain';
-import { relocationSchema, type Paged } from '@erp/shared';
+import { assembleKits, refreshAvgCost, relocate } from '@erp/domain';
+import { kitAssemblySchema, relocationSchema, type Paged } from '@erp/shared';
 import { Perm } from '../auth/decorators';
 import { AuditService } from '../audit/audit.service';
 import { CurrentActor, type Actor } from '../common/actor';
 import { InjectDb } from '../common/db';
 import { likePattern, readListQuery, str } from '../common/listing';
 import { parse } from '../common/zod';
-import { assertWarehouse, showCosts, whScope, whScopeSql } from './common';
+import { assertWarehouse, negativeAuth, showCosts, whScope, whScopeSql } from './common';
 
 const isUuid = (v: string | undefined) => (v && /^[0-9a-f-]{36}$/i.test(v) ? v : undefined);
 const isDate = (v: string | undefined) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
@@ -49,7 +49,8 @@ export class InventoryController {
 
     const stConds: SQL[] = [whScopeSql(actor, sql`st.warehouse_id`)];
     if (wh) stConds.push(sql`st.warehouse_id = ${wh}::uuid`);
-    const skuConds: SQL[] = [sql`s.is_kit = false`];
+    // Los kits sólo aparecen cuando tienen piezas armadas (su disponible por armar está en la ficha del SKU).
+    const skuConds: SQL[] = [sql`(s.is_kit = false OR EXISTS (SELECT 1 FROM inventory_balances kb WHERE kb.master_sku_id = s.id AND kb.qty <> 0))`];
     if (lq.q) {
       const p = likePattern(lq.q);
       skuConds.push(sql`(s.sku_code ILIKE ${p} OR s.name ILIKE ${p} OR p.name ILIKE ${p}
@@ -73,7 +74,7 @@ export class InventoryController {
             : sql`coalesce(sum(st.on_hand), 0) <> 0 OR coalesce(sum(st.in_transit), 0) <> 0 OR coalesce(sum(st.reserved + st.committed), 0) <> 0`;
 
     const base = sql`
-      SELECT s.id, s.sku_code, s.name, s.status, p.name AS product_name, b.name AS brand_name,
+      SELECT s.id, s.sku_code, s.name, s.status, s.is_kit, p.name AS product_name, b.name AS brand_name,
              coalesce(sum(st.on_hand), 0)::int AS on_hand,
              coalesce(sum(st.blocked), 0)::int AS blocked,
              coalesce(sum(st.reserved), 0)::int AS reserved,
@@ -123,6 +124,7 @@ export class InventoryController {
       skuCode: r.sku_code as string,
       name: r.name as string,
       status: r.status as string,
+      isKit: Boolean(r.is_kit),
       productName: r.product_name as string,
       brandName: (r.brand_name as string | null) ?? null,
       onHand: r.on_hand as number,
@@ -165,7 +167,9 @@ export class InventoryController {
       .where(and(eq(warehouses.status, 'ACTIVO'), whScope(actor, warehouses.id)))
       .orderBy(asc(warehouses.code));
 
-    // Kit: disponible = mínimo entre componentes de (disponible del componente ÷ piezas por kit).
+    // Kit: existencia física (kits ya armados, p. ej. bundles en FBA) + en bodega propia, los que se pueden armar
+    // con los componentes disponibles: mínimo de (disponible del componente ÷ piezas por kit).
+    // En almacenes del canal (FBA, FBL) el canal no arma kits: sólo cuenta lo físico.
     const components = sku.isKit
       ? await this.db
           .select({ componentId: kitComponents.componentSkuId, qty: kitComponents.quantity, skuCode: masterSkus.skuCode, name: masterSkus.name })
@@ -173,25 +177,22 @@ export class InventoryController {
           .innerJoin(masterSkus, eq(masterSkus.id, kitComponents.componentSkuId))
           .where(eq(kitComponents.kitSkuId, skuId))
       : [];
-    const ids = sku.isKit ? components.map((c) => c.componentId) : [skuId];
-    const stockRows = ids.length
-      ? (
-          await this.db.execute<Row>(sql`SELECT * FROM inventory_stock st WHERE st.master_sku_id IN (${sql.join(
-            ids.map((i) => sql`${i}::uuid`),
-            sql`, `,
-          )}) AND ${whScopeSql(actor, sql`st.warehouse_id`)}`)
-        ).rows
-      : [];
+    const ids = [skuId, ...components.map((c) => c.componentId)];
+    const stockRows = (
+      await this.db.execute<Row>(sql`SELECT * FROM inventory_stock st WHERE st.master_sku_id IN (${sql.join(
+        ids.map((i) => sql`${i}::uuid`),
+        sql`, `,
+      )}) AND ${whScopeSql(actor, sql`st.warehouse_id`)}`)
+    ).rows;
     const stockKey = (s: string, w: string) => stockRows.find((r) => r.master_sku_id === s && r.warehouse_id === w);
+    const assemblesHere = (type: string) => type === 'PROPIO' || type === 'OPERADOR_LOGISTICO';
 
     const byWarehouse = whRows.map((w) => {
-      if (sku.isKit) {
-        const avail = components.length
+      const r = stockKey(skuId, w.id);
+      const assemblable =
+        sku.isKit && components.length && assemblesHere(w.type)
           ? Math.min(...components.map((c) => Math.floor(Math.max(Number(stockKey(c.componentId, w.id)?.available ?? 0), 0) / c.qty)))
           : 0;
-        return { warehouseId: w.id, code: w.code, name: w.name, type: w.type, onHand: avail, blocked: 0, reserved: 0, committed: 0, inTransit: 0, available: avail, value: null };
-      }
-      const r = stockKey(skuId, w.id);
       return {
         warehouseId: w.id,
         code: w.code,
@@ -202,35 +203,35 @@ export class InventoryController {
         reserved: Number(r?.reserved ?? 0),
         committed: Number(r?.committed ?? 0),
         inTransit: Number(r?.in_transit ?? 0),
-        available: Number(r?.available ?? 0),
+        /** Kits que se pueden armar con los componentes de este almacén (sólo bodega propia). */
+        assemblable,
+        available: Number(r?.available ?? 0) + assemblable,
         value: costs ? String(r?.value ?? '0.00') : null,
       };
     });
 
-    const balances = sku.isKit
-      ? []
-      : (
-          await this.db.execute<Row>(sql`
-            SELECT b.warehouse_id, w.code AS warehouse_code, b.location_id, wl.code AS location_code, wl.type AS location_type,
-                   b.lot_id, l.lot_code, l.received_at, l.unit_cost, l.cost_status, b.qty
-              FROM inventory_balances b
-              JOIN warehouses w ON w.id = b.warehouse_id
-              JOIN warehouse_locations wl ON wl.id = b.location_id
-              LEFT JOIN inventory_lots l ON l.id = b.lot_id
-             WHERE b.master_sku_id = ${skuId}::uuid AND b.qty <> 0 AND ${whScopeSql(actor, sql`b.warehouse_id`)}
-             ORDER BY w.code, l.received_at NULLS LAST, wl.code`)
-        ).rows.map((r) => ({
-          warehouseId: r.warehouse_id as string,
-          warehouseCode: r.warehouse_code as string,
-          locationId: r.location_id as string,
-          locationCode: r.location_code as string,
-          locationType: r.location_type as string,
-          lotId: (r.lot_id as string | null) ?? null,
-          lotCode: (r.lot_code as string | null) ?? null,
-          receivedAt: (r.received_at as string | null) ?? null,
-          qty: r.qty as number,
-          ...(costs ? { unitCost: (r.unit_cost as string | null) ?? sku.avgCost ?? null, costStatus: (r.cost_status as string | null) ?? null } : {}),
-        }));
+    const balances = (
+      await this.db.execute<Row>(sql`
+        SELECT b.warehouse_id, w.code AS warehouse_code, b.location_id, wl.code AS location_code, wl.type AS location_type,
+               b.lot_id, l.lot_code, l.received_at, l.unit_cost, l.cost_status, b.qty
+          FROM inventory_balances b
+          JOIN warehouses w ON w.id = b.warehouse_id
+          JOIN warehouse_locations wl ON wl.id = b.location_id
+          LEFT JOIN inventory_lots l ON l.id = b.lot_id
+         WHERE b.master_sku_id = ${skuId}::uuid AND b.qty <> 0 AND ${whScopeSql(actor, sql`b.warehouse_id`)}
+         ORDER BY w.code, l.received_at NULLS LAST, wl.code`)
+    ).rows.map((r) => ({
+      warehouseId: r.warehouse_id as string,
+      warehouseCode: r.warehouse_code as string,
+      locationId: r.location_id as string,
+      locationCode: r.location_code as string,
+      locationType: r.location_type as string,
+      lotId: (r.lot_id as string | null) ?? null,
+      lotCode: (r.lot_code as string | null) ?? null,
+      receivedAt: (r.received_at as string | null) ?? null,
+      qty: r.qty as number,
+      ...(costs ? { unitCost: (r.unit_cost as string | null) ?? sku.avgCost ?? null, costStatus: (r.cost_status as string | null) ?? null } : {}),
+    }));
 
     // Stock virtual de cada publicación: disponible en su almacén ÷ unidades por publicación.
     const listings = await this.db
@@ -259,8 +260,14 @@ export class InventoryController {
     });
 
     const total = byWarehouse.reduce(
-      (a, w) => ({ onHand: a.onHand + w.onHand, available: a.available + w.available, inTransit: a.inTransit + w.inTransit, reserved: a.reserved + w.reserved + w.committed }),
-      { onHand: 0, available: 0, inTransit: 0, reserved: 0 },
+      (a, w) => ({
+        onHand: a.onHand + w.onHand,
+        available: a.available + w.available,
+        inTransit: a.inTransit + w.inTransit,
+        reserved: a.reserved + w.reserved + w.committed,
+        assemblable: a.assemblable + w.assemblable,
+      }),
+      { onHand: 0, available: 0, inTransit: 0, reserved: 0, assemblable: 0 },
     );
     return {
       sku: { id: sku.id, skuCode: sku.skuCode, name: sku.name, isKit: sku.isKit, ...(costs ? { avgCost: sku.avgCost, currentCost: sku.currentCost } : {}) },
@@ -547,6 +554,40 @@ export class InventoryController {
     });
   }
 
+  /**
+   * Armar o desarmar kits en un almacén. Armar: salen los componentes y entra el kit con su costo
+   * (para mandar bundles a FBA o FBL). Desarmar: sale el kit y regresan los componentes.
+   */
+  @Post('kit-assembly')
+  @Perm('transferencias.crear')
+  async kitAssembly(@Body() body: unknown, @CurrentActor() actor: Actor) {
+    const data = parse(kitAssemblySchema, body);
+    assertWarehouse(actor, data.warehouseId);
+    const negative = negativeAuth(actor, data.authorizeNegative);
+    return this.db.transaction(async (tx) => {
+      const ref = `AK-${Date.now().toString(36).toUpperCase()}`;
+      const r = await assembleKits(tx, {
+        kitId: data.kitId,
+        warehouseId: data.warehouseId,
+        qty: data.qty,
+        mode: data.mode,
+        locationId: data.locationId,
+        document: { type: 'ARMADO_KIT', id: ref, folio: ref },
+        userId: actor.id,
+        notes: data.notes,
+        negativeAuthorizedById: negative,
+      });
+      const [kit] = await tx.select({ skuCode: masterSkus.skuCode }).from(masterSkus).where(eq(masterSkus.id, data.kitId));
+      const [wh] = await tx.select({ code: warehouses.code }).from(warehouses).where(eq(warehouses.id, data.warehouseId));
+      await this.audit.log(tx, actor, {
+        action: data.mode === 'ARMAR' ? 'ARMAR_KIT' : 'DESARMAR_KIT', module: 'inventario', entity: 'inventory_movements', entityId: ref,
+        summary: `${data.mode === 'ARMAR' ? 'Armó' : 'Desarmó'} ${data.qty} kits ${kit?.skuCode} en ${wh?.code} (${r.components.map((c) => `${Math.abs(c.qty)} × ${c.skuCode}`).join(' + ')})`,
+        newValues: { ...data, kitCost: r.kitCost },
+      });
+      return { folio: ref, ...r, ...(showCosts(actor) ? {} : { kitCost: null, unitCost: null, components: r.components.map((c) => ({ ...c, totalCost: null })) }) };
+    });
+  }
+
   // ───────────────────────────── utilidades ─────────────────────────────
 
   private movementFilters(query: Record<string, string>, actor: Actor, q?: string): SQL {
@@ -603,7 +644,7 @@ export class InventoryController {
   @Post('recalculate-costs')
   @Perm('configuracion.editar', 'costos.ver')
   async recalc() {
-    const ids = await this.db.select({ id: masterSkus.id }).from(masterSkus).where(eq(masterSkus.isKit, false));
+    const ids = await this.db.select({ id: masterSkus.id }).from(masterSkus);
     await this.db.transaction((tx) => refreshAvgCost(tx, ids.map((i) => i.id)));
     return { skus: ids.length };
   }

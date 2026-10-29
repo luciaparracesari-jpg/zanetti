@@ -74,7 +74,7 @@ export const initialStockTemplate: ImportTemplate<InitialStockPlan> = {
     'Carga las existencias de arranque por SKU, almacén y ubicación con su costo unitario. Cada renglón crea un lote (FIFO) y un movimiento de inventario inicial; reimportar el mismo lote no lo duplica dentro del mismo archivo.',
   permissions: ['ajustes.autorizar', 'costos.ver'],
   columns: [
-    { field: 'skuCode', header: 'SKU MAESTRO', aliases: ['SKU', 'CODIGO SKU', 'SKU MASTER'], required: true, example: 'X003Q4BXC7', help: 'SKU maestro existente (no kits).' },
+    { field: 'skuCode', header: 'SKU MAESTRO', aliases: ['SKU', 'CODIGO SKU', 'SKU MASTER'], required: true, example: 'X003Q4BXC7', help: 'SKU maestro existente. Un kit sólo se carga si ya está armado (bundles en FBA o FBL); en bodega propia su existencia se calcula con los componentes.' },
     { field: 'warehouse', header: 'ALMACEN', aliases: ['ALMACÉN', 'BODEGA', 'CODIGO ALMACEN'], required: true, example: 'APLIN', help: 'Código del almacén: APLIN, AMZ-FBA, LIV-FBL o LIV-99MIN. También se aceptan FBA, FBL y 99 MIN.' },
     { field: 'location', header: 'UBICACION', aliases: ['UBICACIÓN', 'LOCALIDAD'], example: 'GEN', help: 'Código de la ubicación dentro del almacén. Si falta, se usa GEN.' },
     { field: 'qty', header: 'CANTIDAD', aliases: ['PIEZAS', 'EXISTENCIA', 'STOCK', 'UNIDADES'], required: true, example: '120', help: 'Piezas físicas (entero). Un 0 se ignora.' },
@@ -144,7 +144,12 @@ export const initialStockTemplate: ImportTemplate<InitialStockPlan> = {
       const sku = code ? skuBy.get(code) : undefined;
       if (!code) err('skuCode', 'Falta el SKU maestro.');
       else if (!sku) err('skuCode', `El SKU ${code} no existe. Impórtalo primero con la plantilla de SKU maestro.`);
-      else if (sku.isKit) err('skuCode', `${sku.skuCode} es un kit: carga la existencia de sus componentes.`);
+      else if (sku.isKit)
+        m.push({
+          field: 'skuCode',
+          level: 'warning',
+          message: `${sku.skuCode} es un kit: se cargan kits ya armados. Si este número sale de sus componentes (como en bodega propia), quita el renglón para no contarlos dos veces.`,
+        });
       else if (sku.status === 'INACTIVO') m.push({ field: 'skuCode', level: 'warning', message: `${sku.skuCode} está inactivo.` });
 
       const whRaw = up(v(r, 'warehouse'));

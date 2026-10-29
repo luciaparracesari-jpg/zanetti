@@ -140,7 +140,6 @@ export class AdjustmentsService {
     for (const [i, it] of data.items.entries()) {
       const s = skus.get(it.masterSkuId);
       if (!s) errors.push({ path: `items.${i}.masterSkuId`, message: 'SKU no encontrado' });
-      else if (s.isKit) errors.push({ path: `items.${i}.masterSkuId`, message: 'Un kit no tiene inventario propio; ajusta sus componentes' });
       if (it.locationId && !locs.has(it.locationId)) errors.push({ path: `items.${i}.locationId`, message: 'La ubicación no es de este almacén' });
       if (it.lotId) {
         const [lot] = await tx.select({ sku: inventoryLots.masterSkuId }).from(inventoryLots).where(eq(inventoryLots.id, it.lotId));

@@ -129,11 +129,27 @@ test('inventario: FIFO, negativos, concurrencia, transferencias y conteos', asyn
   const det = ok(await admin.get(`/inventory/stock/${d.a.id}`), 200);
   assert.ok(det.balances.every((b) => b.qty > 0 && b.lotCode), 'sin saldos negativos ni sin lote después de cubrir');
 
-  // ── Kits: no tienen inventario propio; su disponible se calcula ──
-  const kitAdj = await admin.post('/adjustments', { warehouseId: d.wh.id, reason: 'MERMA', items: [{ masterSkuId: d.kit.id, qty: -1 }] });
-  assert.equal(kitAdj.status, 422);
-  const kitStock = ok(await admin.get(`/inventory/stock/${d.kit.id}`), 200);
-  assert.equal(kitStock.byWarehouse.find((w) => w.warehouseId === d.wh.id).available, 15, 'min(30/2, 40/1)');
+  // ── Kits: en bodega propia se pueden armar con los componentes; armados tienen existencia física ──
+  let kitStock = ok(await admin.get(`/inventory/stock/${d.kit.id}`), 200);
+  let kw = kitStock.byWarehouse.find((w) => w.warehouseId === d.wh.id);
+  assert.equal(kw.assemblable, 15, 'min(30/2, 40/1)');
+  assert.equal(kw.available, 15);
+  assert.equal(kw.onHand, 0);
+  assert.equal(kitStock.byWarehouse.find((w) => w.code === 'AMZ-FBA').assemblable, 0, 'FBA no arma kits');
+  const noKit = await adjust(admin, d.wh.id, [{ masterSkuId: d.kit.id, qty: -1 }], 'MERMA');
+  assert.equal(noKit.status, 409, 'no hay kits armados que sacar');
+  const armado = ok(await admin.post('/inventory/kit-assembly', { kitId: d.kit.id, warehouseId: d.wh.id, qty: 3, mode: 'ARMAR' }));
+  assert.equal(armado.unitCost, (2 * 120 + 20).toFixed(4), 'el kit cuesta lo que costaron sus componentes');
+  kitStock = ok(await admin.get(`/inventory/stock/${d.kit.id}`), 200);
+  kw = kitStock.byWarehouse.find((w) => w.warehouseId === d.wh.id);
+  assert.equal(kw.onHand, 3);
+  assert.equal(kw.assemblable, 12, 'quedan 24 A y 37 B');
+  assert.equal(kw.available, 15);
+  ok(await admin.post('/inventory/kit-assembly', { kitId: d.kit.id, warehouseId: d.wh.id, qty: 3, mode: 'DESARMAR' }));
+  st = await stockOf(admin, d.a.id, d.wh.id);
+  assert.equal(st.onHand, 30, 'los componentes regresan');
+  assert.equal(st.value, '3600.00', 'armar y desarmar no cambian el valor');
+  assert.equal((await stockOf(admin, d.b.id, d.wh.id)).onHand, 40);
 
   // ── Concurrencia: dos salidas de 25 sobre 30 en paralelo → sólo una pasa ──
   const [r1, r2] = await Promise.all([
@@ -323,15 +339,17 @@ test('inventario inicial desde CSV: valida, aplica y no duplica', async () => {
   fd.append('template', 'inventario-inicial');
   fd.append('file', new Blob([csv], { type: 'text/csv' }), `inventario-${RUN}.csv`);
   const batch = ok(await admin.req('POST', '/data-imports', fd));
-  assert.equal(batch.summary.error, 3, 'kit, ubicación inexistente y fecha futura');
+  assert.equal(batch.summary.error, 2, 'ubicación inexistente y fecha futura');
   const rows = ok(await admin.get(`/data-imports/${batch.id}/rows?pageSize=50`), 200).items;
   const warn = rows.find((r) => r.rowNumber === 4);
   assert.ok(warn.messages.some((m) => /Sin costo/.test(m.message)));
+  const kitRow = rows.find((r) => r.rowNumber === 5);
+  assert.ok(kitRow.messages.some((m) => m.level === 'warning' && /kits ya armados/.test(m.message)), 'un kit se carga como armado, con aviso');
   for (const r of rows.filter((x) => x.status === 'ERROR')) ok(await admin.patch(`/data-imports/${batch.id}/rows/${r.id}`, { skipped: true }), 200);
   const applied = ok(await admin.post(`/data-imports/${batch.id}/apply`), 200);
   assert.equal(applied.status, 'APLICADO');
-  assert.equal(applied.result.piezas, 47);
-  assert.equal(applied.result.lotes, 2, 'el mismo lote en dos almacenes es un solo lote');
+  assert.equal(applied.result.piezas, 50);
+  assert.equal(applied.result.lotes, 3, 'el mismo lote en dos almacenes es un solo lote');
   const a = ok(await admin.get(`/inventory/stock/${d.a.id}`), 200);
   assert.equal(a.total.onHand, 42);
   assert.equal(a.total.value, (42 * 85.5).toFixed(2));

@@ -50,7 +50,8 @@ Menú **Inventario**. Todo cambio de existencia pasa por un solo motor (`package
 - **Transferencias**: borrador → autorizar (aparta en el origen) → enviar (sale FIFO y queda en tránsito) → recibir (una o varias recepciones; se puede cerrar con diferencias). Se captura por piezas o escaneando la caja master.
 - **Conteos físicos**: al abrir se toma la foto de la existencia; al cerrar se ajusta sólo contado − foto, así no se pierden las ventas o envíos que ocurran mientras se cuenta. En conteo ciego, quien captura no ve el sistema. Cerrar requiere autorizar ajustes.
 - **Kardex** por SKU con saldo y valor acumulados; **movimientos** filtrables por almacén, tipo, documento y fechas; exportación CSV.
-- **Kits**: no tienen existencia propia; su disponible es el del componente que alcance para menos kits.
+- **Kits (bundles)**: en bodega propia su disponible incluye los que se pueden armar con los componentes (el componente que alcance para menos kits). En Amazon FBA y Liverpool el canal no arma kits: sólo cuentan los kits ya armados. **Armar kits** (Existencias o la ficha del kit) saca los componentes FIFO y mete el kit con la suma de sus costos; desarmar hace lo contrario. Así se mandan bundles a FBA con su propio FNSKU.
+- **Importar kits**: plantilla **Kits (bundles)** en Importar desde Excel, un renglón por componente: `SKU KIT`, `NOMBRE` (sólo si el kit es nuevo), `FNSKU` (se guarda en su publicación de Amazon), `COMPONENTE`, `CANTIDAD`. Si el kit no existe se crea; un SKU con existencia propia no se puede convertir en kit.
 
 ### Cargar el inventario inicial
 

@@ -134,11 +134,11 @@ function NewCountDialog({ open, onClose }: { open: boolean; onClose: () => void 
           </Select>
         </Field>
         <Field label="Conteo cíclico (opcional)" hint="Agrega SKU para contar sólo esos; vacío = todo lo que tiene existencia." className="sm:col-span-2">
-          <AsyncCombobox<{ id: string; skuCode: string; name: string }>
+          <AsyncCombobox<{ id: string; skuCode: string; name: string; isKit: boolean }>
             value={null}
             onChange={(v, o) => v && o && !skus.some((s) => s.id === v) && setSkus([...skus, { id: v, label: o.label }])}
-            fetchPath="/skus/options?excludeKits=true"
-            map={(s) => ({ value: s.id, label: s.skuCode, hint: s.name })}
+            fetchPath="/skus/options"
+            map={(s) => ({ value: s.id, label: s.skuCode, hint: `${s.isKit ? 'Kit · ' : ''}${s.name}` })}
             placeholder="Agregar SKU…"
           />
           {skus.length > 0 && (

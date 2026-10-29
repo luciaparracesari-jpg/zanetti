@@ -69,7 +69,6 @@ export function ScanBox({ onResolved, placeholder = 'Escanea o escribe SKU, cód
         try {
           const r = await resolveCode(c);
           if (!r.sku) setMsg(`No se encontró “${c}”.`);
-          else if (r.sku.isKit) setMsg(`${r.sku.skuCode} es un kit: captura sus componentes.`);
           else {
             setMsg(r.packageCode ? `Caja ${r.packageCode}: ${r.units} pzas de ${r.sku.skuCode}` : `${r.sku.skuCode} · ${r.sku.name}`);
             onResolved({ ...r, code: c });

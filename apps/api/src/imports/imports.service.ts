@@ -16,10 +16,11 @@ import { countSql } from '../common/listing';
 import { AuditService } from '../audit/audit.service';
 import { normHeader, parseFile, UnsupportedFileError, type ParsedSheet } from './parse';
 import { initialStockTemplate } from './templates/initial-stock.template';
+import { kitsTemplate } from './templates/kits.template';
 import { skusTemplate } from './templates/skus.template';
 import type { AnyTemplate, InputRow, RowMessage, RowValues, ValidatedRow } from './types';
 
-const TEMPLATES: AnyTemplate[] = [skusTemplate, initialStockTemplate];
+const TEMPLATES: AnyTemplate[] = [skusTemplate, kitsTemplate, initialStockTemplate];
 const MAX_ROWS = 5000;
 const HEADER_SCAN_ROWS = 20;
 

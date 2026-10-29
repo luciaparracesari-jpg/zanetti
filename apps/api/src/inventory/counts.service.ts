@@ -158,8 +158,8 @@ export class CountsService {
       if (open.length) throw new ConflictException(`Ya hay un conteo abierto que cubre esa zona (${open.map((o) => o.folio).join(', ')}). Ciérralo o cancélalo primero.`);
       if (data.skuIds.length) {
         const skus = await skusById(tx, data.skuIds);
-        const bad = data.skuIds.filter((s) => !skus.get(s) || skus.get(s)!.isKit);
-        if (bad.length) throw rowErrors([{ path: 'skuIds', message: 'Hay SKU que no existen o son kits' }]);
+        const bad = data.skuIds.filter((s) => !skus.get(s));
+        if (bad.length) throw rowErrors([{ path: 'skuIds', message: 'Hay SKU que no existen' }]);
       }
 
       const folio = await nextFolio(tx, 'CF');
@@ -238,7 +238,6 @@ export class CountsService {
       if (!loc) throw rowErrors([{ path: 'locationId', message: 'La ubicación no es de este almacén' }]);
       const sku = (await skusById(tx, [data.masterSkuId])).get(data.masterSkuId);
       if (!sku) throw rowErrors([{ path: 'masterSkuId', message: 'SKU no encontrado' }]);
-      if (sku.isKit) throw rowErrors([{ path: 'masterSkuId', message: 'Un kit no se cuenta; cuenta sus componentes' }]);
       const [asOf] = (
         await tx.execute<{ qty: number }>(sql`SELECT coalesce(sum(qty), 0)::int AS qty FROM inventory_movements
           WHERE master_sku_id = ${data.masterSkuId}::uuid AND warehouse_id = ${c.warehouseId}::uuid AND location_id = ${data.locationId}::uuid

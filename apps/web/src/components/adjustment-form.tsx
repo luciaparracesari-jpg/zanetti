@@ -191,12 +191,12 @@ export function AdjustmentForm({ initial }: { initial: AdjustmentDraft }) {
                   <tr key={l.key} className="border-t border-line align-top">
                     <td className="px-2 py-1.5 text-xs text-ink-faint">{i + 1}</td>
                     <td className="px-2 py-1">
-                      <AsyncCombobox<{ id: string; skuCode: string; name: string }>
+                      <AsyncCombobox<{ id: string; skuCode: string; name: string; isKit: boolean }>
                         value={l.masterSkuId}
                         initialLabel={l.skuLabel}
                         onChange={(v, o) => setLine(l.key, { masterSkuId: v, skuLabel: o?.label ?? null, lotId: '' })}
-                        fetchPath="/skus/options?excludeKits=true"
-                        map={(s) => ({ value: s.id, label: s.skuCode, hint: s.name })}
+                        fetchPath="/skus/options"
+                        map={(s) => ({ value: s.id, label: s.skuCode, hint: `${s.isKit ? 'Kit · ' : ''}${s.name}` })}
                         placeholder="Buscar SKU…"
                         invalid={Boolean(err(`items.${i}.masterSkuId`))}
                       />

@@ -51,12 +51,12 @@ export default function KardexPage() {
       <Panel className="mb-3">
         <div className="grid gap-3 sm:grid-cols-[minmax(16rem,24rem)_14rem_auto] sm:items-end">
           <Field label="SKU maestro" required>
-            <AsyncCombobox<{ id: string; skuCode: string; name: string }>
+            <AsyncCombobox<{ id: string; skuCode: string; name: string; isKit: boolean }>
               value={skuId || null}
               initialLabel={sku.data?.skuCode ?? null}
               onChange={(v) => u.set({ skuId: v })}
-              fetchPath="/skus/options?excludeKits=true"
-              map={(s) => ({ value: s.id, label: s.skuCode, hint: s.name })}
+              fetchPath="/skus/options"
+              map={(s) => ({ value: s.id, label: s.skuCode, hint: `${s.isKit ? 'Kit · ' : ''}${s.name}` })}
               placeholder="Buscar SKU…"
             />
           </Field>
