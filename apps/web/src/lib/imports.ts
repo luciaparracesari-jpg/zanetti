@@ -80,6 +80,16 @@ export const RESULT_LABELS: Record<string, string> = {
   kitsActualizados: 'Kits definidos',
   componentes: 'Componentes',
   fnskuGuardados: 'FNSKU guardados',
+  ventas: 'Renglones de venta',
+  devoluciones: 'Devoluciones',
+  piezasVendidas: 'Piezas vendidas',
+  piezasDevueltas: 'Piezas devueltas',
+  sinSku: 'Sin SKU ligado',
+  yaImportados: 'Ya importados',
+  contenedoresCreados: 'Contenedores creados',
+  contenedoresActualizados: 'Contenedores actualizados',
+  lineas: 'Líneas',
+  proveedoresCreados: 'Proveedores creados',
 };
 
 /** Resumen de una línea de lo que hará el renglón. */
