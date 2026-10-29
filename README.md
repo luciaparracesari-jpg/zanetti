@@ -4,7 +4,7 @@ Plataforma ERP web para administrar un negocio de ecommerce multicanal en Méxic
 
 Diseño completo (arquitectura, modelo de datos, APIs, roles, flujos, wireframes y roadmap): documento **“ERP Ecommerce — Diseño del sistema”** en el proyecto Zanetti de Claude. Las decisiones técnicas que cambiaron respecto al diseño están en [`docs/decisiones.md`](docs/decisiones.md).
 
-## Estado: entregas 1 y 2 de 6 del MVP
+## Estado: entregas 1 y 2 de 6 del MVP, más ventas y reabasto
 
 | Incluido en las entregas 1 y 2 | Llega después |
 | --- | --- |
@@ -58,6 +58,14 @@ Menú **Inventario**. Todo cambio de existencia pasa por un solo motor (`package
 **Inventario → Inventario inicial** (requiere autorizar ajustes y ver costos). Columnas: `SKU MAESTRO`, `ALMACEN` (APLIN, AMZ-FBA, LIV-FBL, LIV-99MIN; también FBA, FBL o 99 MIN), `UBICACION` (por omisión GEN), `CANTIDAD`, `COSTO UNITARIO` (MXN sin IVA), `ESTADO DEL COSTO` (FINAL o PROVISIONAL, opcional), `LOTE` y `FECHA ENTRADA`. Sin fecha, el orden del archivo define el FIFO: de arriba hacia abajo, del lote más antiguo al más reciente. Si falta el costo, el lote queda en 0 como “provisional” y no cuenta para el costo promedio. El mismo lote en varios almacenes se repite con el mismo costo.
 
 Lo que ya va en camino a FBA se carga en APLIN y se manda con una transferencia APLIN → AMZ-FBA (autorizar y registrar envío): así queda “en tránsito” con su costo y el dashboard lo muestra aparte como valor en tránsito.
+
+## Ventas, reabasto y contenedores
+
+- **Ventas → Importar reportes de ventas**: plantillas para el reporte mensual de Amazon (MonthlyCombinedTax; AFN = FBA, MFN = envío propio), el detalle de Liverpool (FBL y Vendor cuentan como FBL; montos con IVA ÷ 1.16) y la exportación de pedidos de Shopify (sin cancelados, reembolsados ni anulados). Se cargan tal como se descargan; volver a cargarlas no duplica ventas. Las ventas **no mueven inventario**: son el historial de demanda.
+- Los códigos que no son SKU maestro ni publicación se guardan sin SKU y aparecen en **Códigos sin ligar**. En **Productos → Equivalencias de códigos** se dice a qué SKU equivale (con piezas por unidad, p. ej. un bundle = 2 piezas); al crearla, las ventas guardadas se ligan solas.
+- **Productos → Medidas de caja (CBM)**: largo, ancho, alto y peso de la caja master; avisa si el CBM del archivo no cuadra con las medidas.
+- **Compras → Contenedores**: se cargan desde Excel (CONTENEDOR, SKU, PIEZAS, FECHA DEL PEDIDO, ESTADO, ETD, FECHA ESTIMADA EN APLIN, PROVEEDOR, COSTO UNITARIO). Llegada a APLIN = la fecha capturada; si no hay, ETD + naviera + aduana; si no hay ETD, fecha del pedido + lead time del SKU más lento. Cuentan como “en camino” los que están en producción, naviera o aduana. **Recibir en APLIN** crea los lotes (código = contenedor) con su costo o, sin costo, como provisional.
+- **Compras → Reabasto**: venta diaria por SKU y canal (promedio de los últimos meses completos sin los meses de quiebre), envíos sugeridos de APLIN a FBA (Almex o DHL según la cobertura) y a Liverpool FBL con lo que alcanza en APLIN (crea la transferencia), SKU que se agotan antes del siguiente contenedor y pedido a China: mínimo por SKU y contenedor lleno (mismos días de venta para todos hasta llenar la capacidad en CBM, en cajas master). Los parámetros se editan en la pestaña Parámetros; por SKU se puede excluir de pedidos o fijar una venta diaria manual.
 
 ## Stack
 
