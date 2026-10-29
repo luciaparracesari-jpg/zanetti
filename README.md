@@ -112,7 +112,7 @@ DATABASE_URL=postgresql://erp:erp@localhost:5432/erp pnpm test
 
 `test/inventory.test.mjs` cubre el inventario: FIFO con costos, rechazo y autorización de negativos, dos salidas simultáneas sobre la misma existencia (sólo una pasa), kits, cuarentena, transferencias por caja master (apartar, cancelar, enviar, recepción parcial y cierre con diferencias), conteo con movimientos posteriores a la foto, umbral de autorización, costos ocultos sin permiso, inventario inicial desde CSV y que el kardex sea de sólo inserción.
 
-El login admite 10 intentos por minuto por IP. Las pruebas abren varias sesiones: arranca la API de pruebas con `LOGIN_THROTTLE_LIMIT=200` (como en CI); nunca lo subas en producción.
+Los archivos de prueba corren uno tras otro (`--test-concurrency=1`): el primero cambia la contraseña inicial del Administrador y en paralelo se pisarían. El login admite 10 intentos por minuto por IP y las pruebas abren varias sesiones: arranca la API de pruebas con `LOGIN_THROTTLE_LIMIT=200` (como en CI); nunca lo subas en producción.
 
 `test/imports.test.mjs` cubre la importación: encabezado en el segundo renglón, espacios invisibles, duplicados, dígito verificador, corrección y omisión de renglones, bloqueo con errores, aplicación, reimportación sin duplicar y conflictos con datos existentes.
 
