@@ -2,11 +2,13 @@ import { Controller, Get } from '@nestjs/common';
 import { asc, desc, eq, sql } from 'drizzle-orm';
 import { auditLogs, channelListings, channels, masterSkus, products, unmappedCodes, warehouses, type Db } from '@erp/db';
 import { Perm } from '../auth/decorators';
+import { CurrentActor, type Actor } from '../common/actor';
 import { InjectDb } from '../common/db';
+import { showCosts, whScopeSql } from '../inventory/common';
 
 /**
- * Resumen de la entrega 1 (catálogo y configuración).
- * Ventas, inventario, reabasto y compras se agregan conforme llegan sus módulos.
+ * Resumen: catálogo (entrega 1) e inventario (entrega 2).
+ * Ventas, reabasto y compras se agregan conforme llegan sus módulos.
  */
 @Controller('dashboard')
 export class DashboardController {
@@ -14,7 +16,7 @@ export class DashboardController {
 
   @Get('summary')
   @Perm('dashboard.ver')
-  async summary() {
+  async summary(@CurrentActor() actor: Actor) {
     const [skuStats] = await this.db
       .select({
         total: sql<number>`count(*)::int`,
@@ -59,8 +61,65 @@ export class DashboardController {
       .orderBy(desc(auditLogs.occurredAt))
       .limit(8);
 
+    const costs = showCosts(actor);
+    const scope = whScopeSql(actor, sql`w.id`);
+    const porAlmacen = (
+      await this.db.execute<Record<string, unknown>>(sql`
+        SELECT w.id, w.code, w.name, w.type,
+               coalesce(sum(st.on_hand), 0)::int AS on_hand,
+               coalesce(sum(st.available), 0)::int AS available,
+               coalesce(sum(st.in_transit), 0)::int AS in_transit,
+               coalesce(sum(st.reserved + st.committed), 0)::int AS reserved,
+               count(st.master_sku_id) FILTER (WHERE st.on_hand > 0)::int AS skus,
+               coalesce(sum(st.value), 0)::numeric(16, 2) AS value
+          FROM warehouses w
+          LEFT JOIN inventory_stock st ON st.warehouse_id = w.id
+         WHERE w.status = 'ACTIVO' AND ${scope}
+         GROUP BY w.id
+         ORDER BY w.code`)
+    ).rows.map((r) => ({
+      id: r.id as string,
+      code: r.code as string,
+      name: r.name as string,
+      type: r.type as string,
+      onHand: r.on_hand as number,
+      available: r.available as number,
+      inTransit: r.in_transit as number,
+      reserved: r.reserved as number,
+      skus: r.skus as number,
+      ...(costs ? { value: r.value as string } : {}),
+    }));
+    const [inv] = (
+      await this.db.execute<Record<string, number>>(sql`
+        SELECT
+          (SELECT count(*)::int FROM inventory_stock st JOIN warehouses w ON w.id = st.warehouse_id WHERE (st.on_hand < 0 OR st.available < 0) AND ${scope}) AS negativos,
+          (SELECT count(*)::int FROM master_skus s WHERE s.status = 'ACTIVO' AND NOT s.is_kit
+              AND NOT EXISTS (SELECT 1 FROM inventory_stock st JOIN warehouses w ON w.id = st.warehouse_id WHERE st.master_sku_id = s.id AND (st.on_hand > 0 OR st.in_transit > 0) AND ${scope})) AS sin_existencia,
+          (SELECT count(*)::int FROM stock_transfers t WHERE t.status = 'ENVIADA') AS transferencias_transito,
+          (SELECT count(*)::int FROM stock_transfers t WHERE t.status IN ('BORRADOR', 'AUTORIZADA')) AS transferencias_por_enviar,
+          (SELECT count(*)::int FROM inventory_adjustments a WHERE a.status = 'POR_AUTORIZAR') AS ajustes_por_autorizar,
+          (SELECT count(*)::int FROM inventory_counts c WHERE c.status = 'ABIERTO') AS conteos_abiertos,
+          (SELECT count(*)::int FROM inventory_lots l WHERE l.cost_status = 'PROVISIONAL'
+              AND EXISTS (SELECT 1 FROM inventory_balances b WHERE b.lot_id = l.id AND b.qty > 0)) AS lotes_costo_provisional`)
+    ).rows;
+    const inventario = {
+      porAlmacen,
+      piezas: porAlmacen.reduce((a, w) => a + w.onHand, 0),
+      disponibles: porAlmacen.reduce((a, w) => a + w.available, 0),
+      enTransito: porAlmacen.reduce((a, w) => a + w.inTransit, 0),
+      ...(costs ? { valor: porAlmacen.reduce((a, w) => a + Number(w.value ?? 0), 0).toFixed(2) } : {}),
+      negativos: inv.negativos,
+      sinExistencia: inv.sin_existencia,
+      transferenciasEnTransito: inv.transferencias_transito,
+      transferenciasPorEnviar: inv.transferencias_por_enviar,
+      ajustesPorAutorizar: inv.ajustes_por_autorizar,
+      conteosAbiertos: inv.conteos_abiertos,
+      lotesCostoProvisional: inv.lotes_costo_provisional,
+    };
+
     return {
       skus: skuStats,
+      inventario,
       productos,
       codigosSinMapear: pendientes,
       publicacionesPorCanal: porCanal,
@@ -68,7 +127,6 @@ export class DashboardController {
       actividadReciente: actividad,
       publicacionesVigentes: porCanal.reduce((a, c) => a + c.publicaciones, 0),
       pendientesPorEntrega: [
-        { entrega: 2, indicadores: ['Inventario total', 'Valor del inventario', 'Inventario por canal'] },
         { entrega: 3, indicadores: ['Compras pendientes', 'Mercancía en tránsito'] },
         { entrega: 4, indicadores: ['Ventas del día, mes y año', 'Pedidos', 'Ticket promedio', 'Ventas por canal'] },
         { entrega: 5, indicadores: ['Stock bajo', 'Agotados', 'Sobreinventario', 'Reabasto próximo'] },

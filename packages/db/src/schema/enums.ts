@@ -30,3 +30,45 @@ export const packageType = pgEnum('package_type', ['CAJA_MASTER', 'CAJA_INTERIOR
 export const importBatchStatus = pgEnum('import_batch_status', ['VALIDADO', 'APLICADO', 'CANCELADO']);
 export const importRowStatus = pgEnum('import_row_status', ['VALIDO', 'ADVERTENCIA', 'ERROR', 'OMITIDO']);
 export const importRowAction = pgEnum('import_row_action', ['CREAR', 'ACTUALIZAR', 'SIN_CAMBIOS']);
+
+// ── Inventario (entrega 2) ──
+export const movementType = pgEnum('movement_type', [
+  'INVENTARIO_INICIAL',
+  'ENTRADA_COMPRA',
+  'ENTRADA_IMPORTACION',
+  'SALIDA_VENTA',
+  'DEVOLUCION_CLIENTE',
+  'DEVOLUCION_PROVEEDOR',
+  'AJUSTE_ENTRADA',
+  'AJUSTE_SALIDA',
+  'CONTEO_AJUSTE',
+  'TRANSFER_SALIDA',
+  'TRANSFER_ENTRADA',
+  'REUBICACION',
+  'ARMADO_KIT',
+  'DESARMADO_KIT',
+  'REVALUACION_COSTO',
+]);
+export const lotCostStatus = pgEnum('lot_cost_status', ['PROVISIONAL', 'FINAL']);
+export const reservationSource = pgEnum('reservation_source', ['PEDIDO', 'TRANSFERENCIA']);
+export const reservationStatus = pgEnum('reservation_status', ['ACTIVA', 'CONSUMIDA', 'LIBERADA']);
+export const transferStatus = pgEnum('transfer_status', [
+  'BORRADOR',
+  'AUTORIZADA',
+  'ENVIADA',
+  'RECIBIDA',
+  'RECIBIDA_CON_DIFERENCIAS',
+  'CANCELADA',
+]);
+export const adjustmentStatus = pgEnum('adjustment_status', ['BORRADOR', 'POR_AUTORIZAR', 'APLICADO', 'CANCELADO']);
+export const adjustmentReason = pgEnum('adjustment_reason', [
+  'MERMA',
+  'DANO',
+  'ROBO',
+  'CADUCIDAD',
+  'ERROR_CAPTURA',
+  'CONCILIACION_CANAL',
+  'INVENTARIO_INICIAL',
+  'OTRO',
+]);
+export const countStatus = pgEnum('count_status', ['ABIERTO', 'CERRADO', 'CANCELADO']);

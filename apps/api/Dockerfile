@@ -9,6 +9,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @erp/shared build \
  && pnpm --filter @erp/db build \
+ && pnpm --filter @erp/domain build \
  && pnpm --filter @erp/api build \
  && pnpm prune --prod
 

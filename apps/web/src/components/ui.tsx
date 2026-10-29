@@ -145,6 +145,19 @@ const STATUS_TONE: Record<string, Tone> = {
   INACTIVO: 'neutral',
   INACTIVA: 'neutral',
   IGNORADO: 'neutral',
+  // Inventario
+  AUTORIZADA: 'info',
+  ENVIADA: 'warn',
+  RECIBIDA: 'ok',
+  RECIBIDA_CON_DIFERENCIAS: 'bad',
+  CANCELADA: 'neutral',
+  CANCELADO: 'neutral',
+  POR_AUTORIZAR: 'warn',
+  APLICADO: 'ok',
+  ABIERTO: 'info',
+  CERRADO: 'ok',
+  PROVISIONAL: 'warn',
+  FINAL: 'ok',
 };
 
 export function StatusBadge({ value, labels }: { value: string; labels: Record<string, string> }) {

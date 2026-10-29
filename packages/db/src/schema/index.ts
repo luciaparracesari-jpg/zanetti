@@ -4,4 +4,5 @@ export * from './config';
 export * from './catalog';
 export * from './channels';
 export * from './imports';
+export * from './inventory';
 export * from './relations';

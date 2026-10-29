@@ -15,10 +15,11 @@ import { InjectDb } from '../common/db';
 import { countSql } from '../common/listing';
 import { AuditService } from '../audit/audit.service';
 import { normHeader, parseFile, UnsupportedFileError, type ParsedSheet } from './parse';
+import { initialStockTemplate } from './templates/initial-stock.template';
 import { skusTemplate } from './templates/skus.template';
 import type { AnyTemplate, InputRow, RowMessage, RowValues, ValidatedRow } from './types';
 
-const TEMPLATES: AnyTemplate[] = [skusTemplate];
+const TEMPLATES: AnyTemplate[] = [skusTemplate, initialStockTemplate];
 const MAX_ROWS = 5000;
 const HEADER_SCAN_ROWS = 20;
 
@@ -387,7 +388,7 @@ export class ImportsService {
         .filter((v) => !skipped.has(v.rowNumber) && v.plan && v.action !== 'SIN_CAMBIOS')
         .map((v) => ({ rowNumber: v.rowNumber, plan: v.plan }));
       const result = toApply.length
-        ? await t.apply(tx, toApply, { actor, audit: this.audit, batchLabel: batch.fileName })
+        ? await t.apply(tx, toApply, { actor, audit: this.audit, batchLabel: batch.fileName, batchId: batch.id })
         : {};
       const summary = { ...result, renglonesAplicados: toApply.length, renglonesOmitidos: skipped.size, sinCambios: validated.filter((v) => !skipped.has(v.rowNumber) && v.action === 'SIN_CAMBIOS').length };
       await tx

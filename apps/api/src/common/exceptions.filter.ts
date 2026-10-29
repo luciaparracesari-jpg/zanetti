@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
+import { InventoryError } from '@erp/domain';
 
 interface PgLikeError {
   code?: string;
@@ -39,6 +40,12 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   saved_filters_uq: 'Ya tienes un filtro guardado con ese nombre.',
   sku_packages_code_uq: 'Ese código de caja ya está registrado.',
   sku_packages_units_ck: 'Las piezas por caja deben ser mayores que 0.',
+  inventory_balances_lot_qty_ck: 'La operación dejaría un lote en negativo.',
+  inventory_lots_code_uq: 'Ese código de lote ya existe para el SKU.',
+  stock_transfers_wh_ck: 'El almacén destino debe ser distinto del origen.',
+  stock_transfer_items_sku_uq: 'El SKU ya está en la transferencia.',
+  stock_transfer_items_recv_ck: 'No se puede recibir más de lo enviado.',
+  inventory_count_lines_uq: 'El SKU ya está en el conteo para esa ubicación.',
 };
 
 function findPgError(err: unknown): PgLikeError | undefined {
@@ -64,6 +71,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message: 'Revisa los datos capturados.',
         errors: exception.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
       });
+    }
+
+    if (exception instanceof InventoryError) {
+      return res.status(409).json({ statusCode: 409, message: exception.message, code: exception.code, details: exception.details ?? null });
     }
 
     if (exception instanceof HttpException) {

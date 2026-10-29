@@ -15,7 +15,13 @@ import { cx } from './ui';
 function SectionLinks({ section, pathname, onNavigate }: { section: NavSection; pathname: string; onNavigate: () => void }) {
   const { can } = useSession();
   const items = (section.items ?? []).filter((i) => !i.perm || can(i.perm));
-  const containsActive = items.some((i) => !i.entrega && pathname.startsWith(i.href.split('?')[0]));
+  const base = (h: string) => h.split('?')[0];
+  const matches = (h: string) => pathname === base(h) || pathname.startsWith(`${base(h)}/`);
+  // La liga activa es la más específica (Existencias = /inventario no se enciende en /inventario/ajustes).
+  const activeHref = items
+    .filter((i) => !i.entrega && matches(i.href))
+    .sort((a, b) => base(b.href).length - base(a.href).length)[0]?.href;
+  const containsActive = Boolean(activeHref);
   const [open, setOpen] = useState(containsActive);
   useEffect(() => {
     if (containsActive) setOpen(true);
@@ -39,7 +45,7 @@ function SectionLinks({ section, pathname, onNavigate }: { section: NavSection; 
       {open && (
         <div className="pb-1">
           {items.map((i) => {
-            const active = !i.entrega && pathname.startsWith(i.href.split('?')[0]);
+            const active = i.href === activeHref;
             return (
               <Link
                 key={i.href}

@@ -23,6 +23,9 @@ importers:
       '@erp/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@erp/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@erp/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -158,6 +161,15 @@ importers:
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
+
+  packages/domain:
+    dependencies:
+      '@erp/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@types/pg@8.23.1)(pg@8.23.1)
 
   packages/shared:
     dependencies:

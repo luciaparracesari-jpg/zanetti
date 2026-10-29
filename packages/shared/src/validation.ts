@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  ADJUSTMENT_REASON,
   BARCODE_TYPE,
   CHANNEL_STATUS,
   CHANNEL_TYPE,
@@ -380,3 +381,143 @@ export const savedFilterSchema = z.object({
   filter: z.record(z.string(), z.unknown()),
   isDefault: z.boolean().default(false),
 });
+
+// ───────────────────────────── Inventario (entrega 2) ─────────────────────────────
+
+const qtyInt = (opts: { allowNegative?: boolean; allowZero?: boolean } = {}) =>
+  z.union([z.number(), z.string()]).transform((v, ctx) => {
+    const n = Number(typeof v === 'string' ? v.replace(/,/g, '').trim() : v);
+    if (!Number.isInteger(n) || Math.abs(n) > 1_000_000) {
+      ctx.addIssue({ code: 'custom', message: 'Debe ser un número entero de piezas' });
+      return z.NEVER;
+    }
+    if (n === 0 && !opts.allowZero) {
+      ctx.addIssue({ code: 'custom', message: 'No puede ser 0' });
+      return z.NEVER;
+    }
+    if (n < 0 && !opts.allowNegative) {
+      ctx.addIssue({ code: 'custom', message: 'No puede ser negativo' });
+      return z.NEVER;
+    }
+    return n;
+  });
+
+export const adjustmentItemSchema = z.object({
+  masterSkuId: id(),
+  /** Con signo: positivo entra, negativo sale. */
+  qty: qtyInt({ allowNegative: true }),
+  locationId: optId(),
+  lotId: optId(),
+  unitCost: decimal(4, { min: 0, max: 10_000_000 }),
+  notes: optText(500),
+});
+
+export const adjustmentSchema = z
+  .object({
+    warehouseId: id(),
+    reason: z.enum(keysOf(ADJUSTMENT_REASON)),
+    notes: optText(1000),
+    items: z.array(adjustmentItemSchema).min(1, 'Agrega al menos un renglón').max(500),
+  })
+  .superRefine((v, ctx) => {
+    const seen = new Set<string>();
+    v.items.forEach((it, i) => {
+      const k = `${it.masterSkuId}|${it.locationId ?? ''}|${it.lotId ?? ''}`;
+      if (seen.has(k)) ctx.addIssue({ code: 'custom', path: ['items', i, 'masterSkuId'], message: 'SKU repetido en la misma ubicación y lote' });
+      seen.add(k);
+      if (it.qty < 0 && it.unitCost !== null)
+        ctx.addIssue({ code: 'custom', path: ['items', i, 'unitCost'], message: 'Las salidas se valúan con el costo de sus lotes (FIFO); no captures costo' });
+    });
+    if (v.notes === null && (v.reason === 'OTRO' || v.reason === 'ERROR_CAPTURA'))
+      ctx.addIssue({ code: 'custom', path: ['notes'], message: 'Explica el motivo del ajuste' });
+  });
+export type AdjustmentInput = z.infer<typeof adjustmentSchema>;
+
+export const applySchema = z.object({
+  /** Sólo Administrador: permite que la salida deje la existencia en negativo. */
+  authorizeNegative: z.boolean().optional().default(false),
+});
+
+export const transferItemSchema = z
+  .object({
+    masterSkuId: id(),
+    qtyRequested: optInt(1, 1_000_000),
+    packageId: optId(),
+    packageQty: optInt(1, 100_000),
+    notes: optText(500),
+  })
+  .superRefine((v, ctx) => {
+    if (v.packageId && v.packageQty === null) ctx.addIssue({ code: 'custom', path: ['packageQty'], message: 'Indica cuántas cajas' });
+    if (!v.packageId && v.qtyRequested === null) ctx.addIssue({ code: 'custom', path: ['qtyRequested'], message: 'Indica las piezas' });
+  });
+
+export const transferSchema = z
+  .object({
+    originWarehouseId: id(),
+    destinationWarehouseId: id(),
+    reference: optText(120),
+    notes: optText(1000),
+    items: z.array(transferItemSchema).min(1, 'Agrega al menos un SKU').max(500),
+  })
+  .superRefine((v, ctx) => {
+    if (v.originWarehouseId === v.destinationWarehouseId)
+      ctx.addIssue({ code: 'custom', path: ['destinationWarehouseId'], message: 'El destino debe ser distinto del origen' });
+    const seen = new Set<string>();
+    v.items.forEach((it, i) => {
+      if (seen.has(it.masterSkuId)) ctx.addIssue({ code: 'custom', path: ['items', i, 'masterSkuId'], message: 'SKU repetido en la transferencia' });
+      seen.add(it.masterSkuId);
+    });
+  });
+export type TransferInput = z.infer<typeof transferSchema>;
+
+export const transferShipSchema = z.object({
+  reference: optText(120),
+  /** Piezas enviadas por renglón; si se omite un renglón se envía lo solicitado. */
+  items: z.array(z.object({ itemId: id(), qtyShipped: qtyInt({ allowZero: true }) })).optional().default([]),
+  authorizeNegative: z.boolean().optional().default(false),
+});
+
+export const transferReceiveSchema = z.object({
+  /** Piezas recibidas en esta recepción (se suman a recepciones anteriores). */
+  items: z.array(z.object({ itemId: id(), qty: qtyInt({ allowZero: true }) })).max(500),
+  locationId: optId(),
+  /** Cerrar aunque falten piezas: la diferencia queda registrada como faltante de la transferencia. */
+  close: z.boolean().optional().default(false),
+  notes: optText(1000),
+});
+
+export const countCreateSchema = z.object({
+  warehouseId: id(),
+  locationId: optId(),
+  blind: z.boolean().optional().default(true),
+  notes: optText(1000),
+  /** Conteo cíclico: sólo estos SKU. Vacío = todo lo que tiene existencia. */
+  skuIds: z.array(id()).max(2000).optional().default([]),
+});
+
+export const countCaptureSchema = z.object({
+  lines: z
+    .array(z.object({ lineId: id(), countedQty: z.union([qtyInt({ allowZero: true }), z.null()]) }))
+    .min(1)
+    .max(2000),
+});
+
+export const countAddLineSchema = z.object({ masterSkuId: id(), locationId: id(), countedQty: optInt(0, 1_000_000) });
+
+export const countCloseSchema = z.object({
+  /** Los renglones sin capturar cuentan como 0 (si no, se ignoran). */
+  uncountedAsZero: z.boolean().optional().default(false),
+  authorizeNegative: z.boolean().optional().default(false),
+});
+
+export const relocationSchema = z
+  .object({
+    masterSkuId: id(),
+    warehouseId: id(),
+    fromLocationId: id(),
+    toLocationId: id(),
+    qty: qtyInt(),
+    lotId: optId(),
+    notes: optText(500),
+  })
+  .refine((v) => v.fromLocationId !== v.toLocationId, { path: ['toLocationId'], message: 'Elige una ubicación distinta' });

@@ -35,6 +35,7 @@ jobs:
         run: |
           pnpm --filter @erp/shared build
           pnpm --filter @erp/db build
+          pnpm --filter @erp/domain build
           pnpm --filter @erp/api build
       - name: Migrar y sembrar
         run: |
@@ -42,7 +43,7 @@ jobs:
           pnpm db:seed
       - name: Pruebas de punta a punta de la API
         run: |
-          node apps/api/dist/main.js &
+          LOGIN_THROTTLE_LIMIT=200 node apps/api/dist/main.js &
           for i in $(seq 1 30); do curl -sf localhost:4000/api/v1/health && break; sleep 1; done
           cd apps/api
           ADMIN_EMAIL=admin@ci.local ADMIN_PASSWORD=CiAdmin2026a ADMIN_NEW_PASSWORD=CiAdmin2026b pnpm test

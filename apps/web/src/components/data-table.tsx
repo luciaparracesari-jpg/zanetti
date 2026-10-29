@@ -75,6 +75,10 @@ interface Props<T> {
   urlParams?: string[];
   /** false oculta la búsqueda y los filtros guardados (tablas cortas sin búsqueda en la API). */
   searchable?: boolean;
+  /** Franja de totales bajo los filtros, con la respuesta completa de la API (p. ej. `totals`, `summary`). */
+  summary?: (data: Paged<T> & Record<string, unknown>) => ReactNode;
+  /** Resalta renglones (p. ej. existencias negativas). */
+  rowClassName?: (row: T) => string | undefined;
 }
 
 const PAGE_SIZES = [25, 50, 100, 200];
@@ -114,6 +118,8 @@ export function DataTable<T>({
   pageSizes = PAGE_SIZES,
   urlParams = [],
   searchable = true,
+  summary,
+  rowClassName,
 }: Props<T>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -365,6 +371,8 @@ export function DataTable<T>({
         </div>
       </div>
 
+      {summary && data && <div className="border-b border-line bg-page/50 px-2 py-2">{summary(data as Paged<T> & Record<string, unknown>)}</div>}
+
       {/* Acciones masivas */}
       {bulkActions && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-line bg-brand-soft px-3 py-1.5 text-sm">
@@ -428,7 +436,7 @@ export function DataTable<T>({
               return (
                 <tr
                   key={id}
-                  className={cx('border-b border-line last:border-b-0 hover:bg-brand-soft/50', (href || onRowClick) && 'cursor-pointer', selected.has(id) && 'bg-brand-soft/60')}
+                  className={cx('border-b border-line last:border-b-0 hover:bg-brand-soft/50', (href || onRowClick) && 'cursor-pointer', selected.has(id) && 'bg-brand-soft/60', rowClassName?.(r))}
                   onClick={(e) => {
                     if ((e.target as HTMLElement).closest('a,button,input,select,label')) return;
                     if (href) router.push(href);

@@ -55,3 +55,61 @@ export const PACKAGE_TYPE = { CAJA_MASTER: 'Caja master', CAJA_INTERIOR: 'Caja i
 export const IMPORT_ROW_STATUS = { VALIDO: 'Válido', ADVERTENCIA: 'Con advertencia', ERROR: 'Con error', OMITIDO: 'Omitido' } as const;
 export const IMPORT_ROW_ACTION = { CREAR: 'Crear', ACTUALIZAR: 'Actualizar', SIN_CAMBIOS: 'Sin cambios' } as const;
 export const IMPORT_BATCH_STATUS = { VALIDADO: 'Por confirmar', APLICADO: 'Aplicado', CANCELADO: 'Cancelado' } as const;
+
+// ── Inventario (entrega 2) ──
+export const MOVEMENT_TYPE = {
+  INVENTARIO_INICIAL: 'Inventario inicial',
+  ENTRADA_COMPRA: 'Entrada por compra',
+  ENTRADA_IMPORTACION: 'Entrada por importación',
+  SALIDA_VENTA: 'Salida por venta',
+  DEVOLUCION_CLIENTE: 'Devolución de cliente',
+  DEVOLUCION_PROVEEDOR: 'Devolución a proveedor',
+  AJUSTE_ENTRADA: 'Ajuste de entrada',
+  AJUSTE_SALIDA: 'Ajuste de salida',
+  CONTEO_AJUSTE: 'Ajuste por conteo',
+  TRANSFER_SALIDA: 'Salida por transferencia',
+  TRANSFER_ENTRADA: 'Entrada por transferencia',
+  REUBICACION: 'Reubicación',
+  ARMADO_KIT: 'Armado de kit',
+  DESARMADO_KIT: 'Desarmado de kit',
+  REVALUACION_COSTO: 'Revaluación de costo',
+} as const;
+export const MOVEMENT_DOCUMENT = {
+  AJUSTE: 'Ajuste',
+  TRANSFERENCIA: 'Transferencia',
+  CONTEO: 'Conteo físico',
+  IMPORTACION: 'Importación',
+  REUBICACION: 'Reubicación',
+} as const;
+export const LOT_COST_STATUS = { PROVISIONAL: 'Provisional', FINAL: 'Final' } as const;
+export const TRANSFER_STATUS = {
+  BORRADOR: 'Borrador',
+  AUTORIZADA: 'Autorizada',
+  ENVIADA: 'En tránsito',
+  RECIBIDA: 'Recibida',
+  RECIBIDA_CON_DIFERENCIAS: 'Recibida con diferencias',
+  CANCELADA: 'Cancelada',
+} as const;
+export const ADJUSTMENT_STATUS = {
+  BORRADOR: 'Borrador',
+  POR_AUTORIZAR: 'Por autorizar',
+  APLICADO: 'Aplicado',
+  CANCELADO: 'Cancelado',
+} as const;
+export const ADJUSTMENT_REASON = {
+  MERMA: 'Merma',
+  DANO: 'Producto dañado',
+  ROBO: 'Robo o extravío',
+  CADUCIDAD: 'Caducidad',
+  ERROR_CAPTURA: 'Error de captura',
+  CONCILIACION_CANAL: 'Conciliación con el canal',
+  INVENTARIO_INICIAL: 'Inventario inicial',
+  OTRO: 'Otro',
+} as const;
+export const COUNT_STATUS = { ABIERTO: 'Abierto', CERRADO: 'Cerrado', CANCELADO: 'Cancelado' } as const;
+export const STOCK_FILTER = {
+  CON: 'Con existencia o en tránsito',
+  SIN: 'Sin existencia',
+  NEGATIVO: 'En negativo',
+  TODOS: 'Todos los SKU',
+} as const;

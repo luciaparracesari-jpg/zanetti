@@ -1,6 +1,20 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { and, asc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
-import { channelListings, channels, masterSkus, products, skuBarcodes, skuPackages, suppliers, warehouses, type Db } from '@erp/db';
+import {
+  channelListings,
+  channels,
+  inventoryAdjustments,
+  inventoryCounts,
+  masterSkus,
+  products,
+  skuBarcodes,
+  skuPackages,
+  stockTransfers,
+  suppliers,
+  warehouses,
+  type Db,
+} from '@erp/db';
+import { ADJUSTMENT_STATUS, COUNT_STATUS, TRANSFER_STATUS } from '@erp/shared';
 import { AuthOnly } from '../auth/decorators';
 import { can, CurrentActor, type Actor } from '../common/actor';
 import { InjectDb } from '../common/db';
@@ -22,7 +36,7 @@ const LIMIT = 8;
 
 /**
  * Búsqueda global agrupada por módulo. Sólo devuelve los grupos que el usuario puede ver.
- * Pedidos y clientes se agregan en la entrega 4.
+ * Pedidos y clientes se agregan en la entrega 4. Incluye folios de transferencias, ajustes y conteos.
  */
 @Controller('search')
 export class SearchController {
@@ -101,6 +115,33 @@ export class SearchController {
         });
       }
     }
+
+    // Documentos de inventario por folio o referencia (TR-000012, AJ-000003, CF-000001, FBA15…).
+    const docs: SearchHit[] = [];
+    if (can(actor, 'transferencias.ver')) {
+      const ts = await this.db
+        .select({ id: stockTransfers.id, folio: stockTransfers.folio, reference: stockTransfers.reference, status: stockTransfers.status })
+        .from(stockTransfers)
+        .where(or(ilike(stockTransfers.folio, p), ilike(stockTransfers.reference, p)))
+        .orderBy(sql`${stockTransfers.createdAt} desc`)
+        .limit(LIMIT);
+      docs.push(...ts.map((t) => ({ id: t.id, title: `Transferencia ${t.folio}`, subtitle: [TRANSFER_STATUS[t.status], t.reference].filter(Boolean).join(' · '), href: `/inventario/transferencias/${t.id}` })));
+      const cs = await this.db
+        .select({ id: inventoryCounts.id, folio: inventoryCounts.folio, status: inventoryCounts.status })
+        .from(inventoryCounts)
+        .where(ilike(inventoryCounts.folio, p))
+        .limit(LIMIT);
+      docs.push(...cs.map((c) => ({ id: c.id, title: `Conteo ${c.folio}`, subtitle: COUNT_STATUS[c.status], href: `/inventario/conteos/${c.id}` })));
+    }
+    if (can(actor, 'ajustes.ver')) {
+      const as = await this.db
+        .select({ id: inventoryAdjustments.id, folio: inventoryAdjustments.folio, status: inventoryAdjustments.status })
+        .from(inventoryAdjustments)
+        .where(ilike(inventoryAdjustments.folio, p))
+        .limit(LIMIT);
+      docs.push(...as.map((a) => ({ id: a.id, title: `Ajuste ${a.folio}`, subtitle: ADJUSTMENT_STATUS[a.status], href: `/inventario/ajustes/${a.id}` })));
+    }
+    if (docs.length) groups.push({ module: 'inventario', label: 'Documentos de inventario', hits: docs.slice(0, LIMIT) });
 
     if (can(actor, 'proveedores.ver')) {
       const sup = await this.db

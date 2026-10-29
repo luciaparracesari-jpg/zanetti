@@ -4,11 +4,12 @@ Plataforma ERP web para administrar un negocio de ecommerce multicanal en Méxic
 
 Diseño completo (arquitectura, modelo de datos, APIs, roles, flujos, wireframes y roadmap): documento **“ERP Ecommerce — Diseño del sistema”** en el proyecto Zanetti de Claude. Las decisiones técnicas que cambiaron respecto al diseño están en [`docs/decisiones.md`](docs/decisiones.md).
 
-## Estado: entrega 1 de 6 del MVP + importación de catálogo
+## Estado: entregas 1 y 2 de 6 del MVP
 
-| Incluido en la entrega 1 | Llega después |
+| Incluido en las entregas 1 y 2 | Llega después |
 | --- | --- |
-| Login con sesiones, bloqueo por intentos, cambio obligatorio de contraseña | Entrega 2: inventario, lotes FIFO, kardex, ajustes, transferencias, conteos |
+| **Inventario (entrega 2):** existencias por almacén y ubicación, lotes FIFO, kardex con saldo, ajustes con autorización, transferencias APLIN ⇄ FBA/FBL por pieza o caja master, conteos físicos ciegos, inventario inicial desde Excel | |
+| Login con sesiones, bloqueo por intentos, cambio obligatorio de contraseña | |
 | Roles y permisos (8 roles iniciales, matriz editable, permiso de campo para costos) | Entrega 3: compras, órdenes de compra, recepciones |
 | Auditoría inmutable (la base de datos rechaza UPDATE/DELETE) | Entrega 4: pedidos, devoluciones, importación de reportes Amazon/Liverpool |
 | Catálogo: productos, SKU maestros, kits (bundles), códigos de barras con validación EAN/UPC, marcas, categorías | Entrega 5: reabasto, alertas, dashboard de ventas, reportes |
@@ -38,6 +39,23 @@ La plantilla **SKU maestro y publicaciones** reconoce el formato de `ERP_ZANETTI
 | UPC-EAN | Código de barras principal (UPC 12 o EAN-13 con dígito verificador) |
 | SKU CAJA MASTER + PIEZAS | Caja master del SKU, que se encuentra con la búsqueda global |
 
+## Inventario
+
+Menú **Inventario**. Todo cambio de existencia pasa por un solo motor (`packages/domain`, `postMovement`) que escribe un movimiento inmutable por lote:
+
+- **Existencias**: físico por almacén, apartado, disponible y en tránsito, con valor al costo (sólo con el permiso “Costos y márgenes”). Disponible = físico − cuarentena/merma − reservado (pedidos) − comprometido (transferencias autorizadas).
+- **Lotes FIFO**: cada entrada crea un lote con su costo; las salidas consumen el más antiguo. En una transferencia el lote viaja con su costo, así FBA y FBL quedan valuados igual que en APLIN.
+- **Sin negativos**: una salida que no alcanza se rechaza mostrando lo disponible. Sólo el Administrador puede autorizarla (casilla explícita); el faltante queda marcado y la siguiente entrada lo cubre primero.
+- **Ajustes**: borrador → aplicar. Si el valor supera `ajustes.umbral_autorizacion_mxn` (Configuración → Empresa y parámetros) y quien aplica no puede autorizar, queda “Por autorizar”.
+- **Transferencias**: borrador → autorizar (aparta en el origen) → enviar (sale FIFO y queda en tránsito) → recibir (una o varias recepciones; se puede cerrar con diferencias). Se captura por piezas o escaneando la caja master.
+- **Conteos físicos**: al abrir se toma la foto de la existencia; al cerrar se ajusta sólo contado − foto, así no se pierden las ventas o envíos que ocurran mientras se cuenta. En conteo ciego, quien captura no ve el sistema. Cerrar requiere autorizar ajustes.
+- **Kardex** por SKU con saldo y valor acumulados; **movimientos** filtrables por almacén, tipo, documento y fechas; exportación CSV.
+- **Kits**: no tienen existencia propia; su disponible es el del componente que alcance para menos kits.
+
+### Cargar el inventario inicial
+
+**Inventario → Inventario inicial** (requiere autorizar ajustes y ver costos). Columnas: `SKU MAESTRO`, `ALMACEN` (APLIN, AMZ-FBA, LIV-FBL, LIV-99MIN; también FBA, FBL o 99 MIN), `UBICACION` (por omisión GEN), `CANTIDAD`, `COSTO UNITARIO` (MXN sin IVA), `LOTE` y `FECHA ENTRADA` (define el orden FIFO). Si falta el costo se usa el del SKU y el lote queda “provisional”. El mismo lote en varios almacenes se repite con el mismo costo.
+
 ## Stack
 
 - **Monorepo** pnpm + Turborepo, TypeScript estricto.
@@ -50,6 +68,7 @@ La plantilla **SKU maestro y publicaciones** reconoce el formato de `ERP_ZANETTI
 apps/api          API REST (NestJS)
 apps/web          Pantallas (Next.js)
 packages/db       Esquema Drizzle, migraciones, seed, hash de contraseñas
+packages/domain   Motor de inventario: movimientos, lotes FIFO, reservas, folios
 packages/shared   Permisos, etiquetas en español, validaciones zod
 deploy/           Caddyfile y script de respaldos
 docs/             Decisiones técnicas
@@ -64,6 +83,7 @@ cp .env.example .env              # ajusta DATABASE_URL y SEED_ADMIN_PASSWORD
 pnpm install
 pnpm --filter @erp/shared build
 pnpm --filter @erp/db build
+pnpm --filter @erp/domain build
 pnpm db:migrate                   # crea tablas, índices, triggers y restricciones
 pnpm db:seed                      # roles, permisos, canales, almacenes, comisiones y usuario administrador
 pnpm dev                          # API en :4000 y web en :3000
@@ -89,6 +109,10 @@ cd apps/api
 ADMIN_EMAIL=admin@zanetti.mx ADMIN_PASSWORD='<contraseña actual>' ADMIN_NEW_PASSWORD='<otra>' \
 DATABASE_URL=postgresql://erp:erp@localhost:5432/erp pnpm test
 ```
+
+`test/inventory.test.mjs` cubre el inventario: FIFO con costos, rechazo y autorización de negativos, dos salidas simultáneas sobre la misma existencia (sólo una pasa), kits, cuarentena, transferencias por caja master (apartar, cancelar, enviar, recepción parcial y cierre con diferencias), conteo con movimientos posteriores a la foto, umbral de autorización, costos ocultos sin permiso, inventario inicial desde CSV y que el kardex sea de sólo inserción.
+
+El login admite 10 intentos por minuto por IP. Las pruebas abren varias sesiones: arranca la API de pruebas con `LOGIN_THROTTLE_LIMIT=200` (como en CI); nunca lo subas en producción.
 
 `test/imports.test.mjs` cubre la importación: encabezado en el segundo renglón, espacios invisibles, duplicados, dígito verificador, corrección y omisión de renglones, bloqueo con errores, aplicación, reimportación sin duplicar y conflictos con datos existentes.
 

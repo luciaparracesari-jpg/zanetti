@@ -12,6 +12,7 @@ import { Can, useSession } from '@/lib/session';
 import { AsyncCombobox } from '@/components/combobox';
 import { ListingDialog, type ListingRow } from '@/components/listing-dialog';
 import { SkuForm, type SkuDetail } from '@/components/sku-form';
+import { SkuInventoryTab } from '@/components/sku-inventory';
 import { useToast } from '@/components/toast';
 import { Badge, Button, Empty, ErrorBox, Field, Input, PageHeader, Panel, Select, Spinner, Stat, StatusBadge, Tabs } from '@/components/ui';
 
@@ -121,18 +122,7 @@ export default function SkuPage({ params }: { params: Promise<{ id: string }> })
       {tab === 'componentes' && <ComponentsTab sku={s} />}
       {tab === 'publicaciones' && <ListingsTab sku={s} />}
       {tab === 'precios' && <PricesTab sku={s} />}
-      {tab === 'inventario' && (
-        <Panel title="Existencias por almacén">
-          <p className="mb-3 text-sm text-ink-soft">
-            El inventario, los lotes FIFO y el kardex llegan en la entrega 2. Esta pestaña mostrará físico, reservado, comprometido, disponible y en tránsito por almacén.
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            {['APLIN · bodega propia', 'AMZ-FBA · Amazon FBA', 'LIV-FBL · Liverpool FBL', 'LIV-99MIN · Liverpool 99 Minutos'].map((w) => (
-              <div key={w} className="rounded border border-dashed border-line-strong px-3 py-2 text-sm text-ink-soft">{w}</div>
-            ))}
-          </div>
-        </Panel>
-      )}
+      {tab === 'inventario' && <SkuInventoryTab skuId={s.id} />}
       {tab === 'historial' && <HistoryTab id={id} />}
     </>
   );

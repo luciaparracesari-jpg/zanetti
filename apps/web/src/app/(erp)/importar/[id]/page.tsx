@@ -52,6 +52,7 @@ export default function ImportBatchPage({ params }: { params: Promise<{ id: stri
       setConfirm(false);
       toast.ok('Importación aplicada.');
       qc.invalidateQueries({ queryKey: ['/skus'] });
+      qc.invalidateQueries({ queryKey: ['/inventory/stock'] });
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
     onError: (e: Error) => { setConfirm(false); toast.error(e.message); refresh(); },
@@ -159,8 +160,17 @@ export default function ImportBatchPage({ params }: { params: Promise<{ id: stri
               .map((k) => <Stat key={k} label={RESULT_LABELS[k]} value={fmtInt(b.result![k])} />)}
           </div>
           <div className="mt-3 flex gap-2">
-            <Link href="/productos/skus"><Button variant="primary">Ver SKU maestros</Button></Link>
-            <Link href="/productos/publicaciones"><Button>Ver publicaciones</Button></Link>
+            {b.template.key === 'inventario-inicial' ? (
+              <>
+                <Link href="/inventario"><Button variant="primary">Ver existencias</Button></Link>
+                <Link href={`/inventario/movimientos?documentId=${b.id}`}><Button>Ver movimientos</Button></Link>
+              </>
+            ) : (
+              <>
+                <Link href="/productos/skus"><Button variant="primary">Ver SKU maestros</Button></Link>
+                <Link href="/productos/publicaciones"><Button>Ver publicaciones</Button></Link>
+              </>
+            )}
             <Link href="/importar"><Button>Nueva importación</Button></Link>
           </div>
         </Panel>

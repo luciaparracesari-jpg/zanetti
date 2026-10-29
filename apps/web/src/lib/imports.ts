@@ -40,7 +40,7 @@ export interface ImportRow {
   action: 'CREAR' | 'ACTUALIZAR' | 'SIN_CAMBIOS' | null;
   skipped: boolean;
   messages: ImportMessage[];
-  plan: SkuPlan | null;
+  plan: SkuPlan | { label: string } | null;
 }
 
 export interface SkuPlan {
@@ -68,11 +68,16 @@ export const RESULT_LABELS: Record<string, string> = {
   renglonesAplicados: 'Renglones aplicados',
   renglonesOmitidos: 'Renglones omitidos',
   sinCambios: 'Sin cambios',
+  piezas: 'Piezas cargadas',
+  lotes: 'Lotes',
+  movimientos: 'Movimientos de inventario',
 };
 
 /** Resumen de una línea de lo que hará el renglón. */
-export function planSummary(p: SkuPlan | null): string {
-  if (!p) return '—';
+export function planSummary(plan: SkuPlan | { label: string } | null): string {
+  if (!plan) return '—';
+  if (!('listings' in plan)) return plan.label;
+  const p = plan;
   const parts: string[] = [];
   if (p.nameChange) parts.push(`nombre → ${p.nameChange.to}`);
   if (p.barcode) parts.push(p.barcode.type === 'UPC' ? 'UPC' : p.barcode.type === 'EAN13' ? 'EAN' : 'código');

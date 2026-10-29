@@ -16,6 +16,18 @@ import {
   suppliers,
 } from './catalog';
 import {
+  inventoryAdjustmentItems,
+  inventoryAdjustments,
+  inventoryBalances,
+  inventoryCountLines,
+  inventoryCounts,
+  inventoryLots,
+  inventoryMovements,
+  stockTransferItemLots,
+  stockTransferItems,
+  stockTransfers,
+} from './inventory';
+import {
   channelListings,
   channels,
   feeRules,
@@ -218,4 +230,68 @@ export const unmappedCodesRelations = relations(unmappedCodes, ({ one }) => ({
 
 export const skuPackagesRelations = relations(skuPackages, ({ one }) => ({
   masterSku: one(masterSkus, { fields: [skuPackages.masterSkuId], references: [masterSkus.id] }),
+}));
+
+// ───────────────────────────── Inventario ─────────────────────────────
+
+export const inventoryLotsRelations = relations(inventoryLots, ({ one, many }) => ({
+  masterSku: one(masterSkus, { fields: [inventoryLots.masterSkuId], references: [masterSkus.id] }),
+  supplier: one(suppliers, { fields: [inventoryLots.supplierId], references: [suppliers.id] }),
+  balances: many(inventoryBalances),
+}));
+
+export const inventoryBalancesRelations = relations(inventoryBalances, ({ one }) => ({
+  masterSku: one(masterSkus, { fields: [inventoryBalances.masterSkuId], references: [masterSkus.id] }),
+  warehouse: one(warehouses, { fields: [inventoryBalances.warehouseId], references: [warehouses.id] }),
+  location: one(warehouseLocations, { fields: [inventoryBalances.locationId], references: [warehouseLocations.id] }),
+  lot: one(inventoryLots, { fields: [inventoryBalances.lotId], references: [inventoryLots.id] }),
+}));
+
+export const inventoryMovementsRelations = relations(inventoryMovements, ({ one }) => ({
+  masterSku: one(masterSkus, { fields: [inventoryMovements.masterSkuId], references: [masterSkus.id] }),
+  warehouse: one(warehouses, { fields: [inventoryMovements.warehouseId], references: [warehouses.id] }),
+  location: one(warehouseLocations, { fields: [inventoryMovements.locationId], references: [warehouseLocations.id] }),
+  lot: one(inventoryLots, { fields: [inventoryMovements.lotId], references: [inventoryLots.id] }),
+}));
+
+export const stockTransfersRelations = relations(stockTransfers, ({ one, many }) => ({
+  origin: one(warehouses, { fields: [stockTransfers.originWarehouseId], references: [warehouses.id], relationName: 'transferOrigin' }),
+  destination: one(warehouses, { fields: [stockTransfers.destinationWarehouseId], references: [warehouses.id], relationName: 'transferDestination' }),
+  items: many(stockTransferItems),
+}));
+
+export const stockTransferItemsRelations = relations(stockTransferItems, ({ one, many }) => ({
+  transfer: one(stockTransfers, { fields: [stockTransferItems.transferId], references: [stockTransfers.id] }),
+  masterSku: one(masterSkus, { fields: [stockTransferItems.masterSkuId], references: [masterSkus.id] }),
+  package: one(skuPackages, { fields: [stockTransferItems.packageId], references: [skuPackages.id] }),
+  lots: many(stockTransferItemLots),
+}));
+
+export const stockTransferItemLotsRelations = relations(stockTransferItemLots, ({ one }) => ({
+  item: one(stockTransferItems, { fields: [stockTransferItemLots.itemId], references: [stockTransferItems.id] }),
+  lot: one(inventoryLots, { fields: [stockTransferItemLots.lotId], references: [inventoryLots.id] }),
+}));
+
+export const inventoryAdjustmentsRelations = relations(inventoryAdjustments, ({ one, many }) => ({
+  warehouse: one(warehouses, { fields: [inventoryAdjustments.warehouseId], references: [warehouses.id] }),
+  items: many(inventoryAdjustmentItems),
+}));
+
+export const inventoryAdjustmentItemsRelations = relations(inventoryAdjustmentItems, ({ one }) => ({
+  adjustment: one(inventoryAdjustments, { fields: [inventoryAdjustmentItems.adjustmentId], references: [inventoryAdjustments.id] }),
+  masterSku: one(masterSkus, { fields: [inventoryAdjustmentItems.masterSkuId], references: [masterSkus.id] }),
+  location: one(warehouseLocations, { fields: [inventoryAdjustmentItems.locationId], references: [warehouseLocations.id] }),
+  lot: one(inventoryLots, { fields: [inventoryAdjustmentItems.lotId], references: [inventoryLots.id] }),
+}));
+
+export const inventoryCountsRelations = relations(inventoryCounts, ({ one, many }) => ({
+  warehouse: one(warehouses, { fields: [inventoryCounts.warehouseId], references: [warehouses.id] }),
+  location: one(warehouseLocations, { fields: [inventoryCounts.locationId], references: [warehouseLocations.id] }),
+  lines: many(inventoryCountLines),
+}));
+
+export const inventoryCountLinesRelations = relations(inventoryCountLines, ({ one }) => ({
+  count: one(inventoryCounts, { fields: [inventoryCountLines.countId], references: [inventoryCounts.id] }),
+  masterSku: one(masterSkus, { fields: [inventoryCountLines.masterSkuId], references: [masterSkus.id] }),
+  location: one(warehouseLocations, { fields: [inventoryCountLines.locationId], references: [warehouseLocations.id] }),
 }));

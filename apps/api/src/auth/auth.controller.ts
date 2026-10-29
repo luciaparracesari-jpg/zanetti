@@ -22,7 +22,8 @@ export class AuthController {
   @Post('login')
   @Public()
   @HttpCode(200)
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  // 10 intentos por minuto por IP. LOGIN_THROTTLE_LIMIT sólo se sube en CI (las pruebas inician muchas sesiones).
+  @Throttle({ default: { limit: Number(process.env.LOGIN_THROTTLE_LIMIT) || 10, ttl: 60_000 } })
   async login(@Body() body: unknown, @Req() req: ErpRequest, @Res({ passthrough: true }) res: Response) {
     const { email, password } = parse(loginSchema, body);
     const { token, mustChangePassword } = await this.auth.login(

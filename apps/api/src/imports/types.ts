@@ -41,6 +41,7 @@ export interface ApplyContext {
   actor: Actor;
   audit: AuditService;
   batchLabel: string;
+  batchId: string;
 }
 
 export interface ImportTemplate<P = unknown> {

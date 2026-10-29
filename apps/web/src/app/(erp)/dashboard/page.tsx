@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { CHANNEL_STATUS } from '@erp/shared';
 import { get } from '@/lib/api';
-import { fmtDateTime, fmtInt } from '@/lib/format';
+import { fmtDateTime, fmtInt, fmtMoney } from '@/lib/format';
+import { useSession } from '@/lib/session';
+import { StockQty } from '@/components/inventory';
 import { ErrorBox, PageHeader, Panel, Spinner, Stat, StatusBadge } from '@/components/ui';
 
 interface Summary {
@@ -16,9 +18,24 @@ interface Summary {
   almacenesActivos: number;
   actividadReciente: { id: number; occurredAt: string; userEmail: string | null; action: string; summary: string | null }[];
   pendientesPorEntrega: { entrega: number; indicadores: string[] }[];
+  inventario: {
+    porAlmacen: { id: string; code: string; name: string; onHand: number; available: number; inTransit: number; reserved: number; skus: number; value?: string }[];
+    piezas: number;
+    disponibles: number;
+    enTransito: number;
+    valor?: string;
+    negativos: number;
+    sinExistencia: number;
+    transferenciasEnTransito: number;
+    transferenciasPorEnviar: number;
+    ajustesPorAutorizar: number;
+    conteosAbiertos: number;
+    lotesCostoProvisional: number;
+  };
 }
 
 export default function DashboardPage() {
+  const { can } = useSession();
   const q = useQuery({ queryKey: ['dashboard-summary'], queryFn: () => get<Summary>('/dashboard/summary') });
   if (q.isLoading) return <Spinner />;
   if (q.error) return <ErrorBox error={q.error} />;
@@ -32,9 +49,78 @@ export default function DashboardPage() {
     { label: 'SKU activos sin publicación vigente', n: d.skus.sinPublicacion, href: '/productos/skus?status=ACTIVO&withoutListings=true' },
   ];
 
+  const inv = d.inventario;
+  const alertas = [
+    { label: 'Ajustes por autorizar', n: inv.ajustesPorAutorizar, href: '/inventario/ajustes?status=POR_AUTORIZAR', show: can('ajustes.ver') },
+    { label: 'Transferencias en tránsito', n: inv.transferenciasEnTransito, href: '/inventario/transferencias?status=ENVIADA', show: can('transferencias.ver') },
+    { label: 'Transferencias por enviar', n: inv.transferenciasPorEnviar, href: '/inventario/transferencias?status=ABIERTAS', show: can('transferencias.ver') },
+    { label: 'Conteos abiertos', n: inv.conteosAbiertos, href: '/inventario/conteos?status=ABIERTO', show: can('transferencias.ver') },
+    { label: 'SKU con existencia negativa', n: inv.negativos, href: '/inventario?stock=NEGATIVO', show: can('inventario.ver'), bad: true },
+    { label: 'Lotes con costo provisional', n: inv.lotesCostoProvisional, href: '/inventario/lotes', show: can('costos.ver') },
+    { label: 'SKU activos sin existencia', n: inv.sinExistencia, href: '/inventario?stock=SIN', show: can('inventario.ver') },
+  ].filter((a) => a.show);
+
   return (
     <>
-      <PageHeader title="Dashboard" subtitle="Catálogo y configuración. Ventas, inventario y compras se suman con cada entrega." />
+      <PageHeader title="Dashboard" subtitle="Catálogo e inventario. Ventas, compras y reabasto se suman con cada entrega." />
+
+      {can('inventario.ver') && (
+        <>
+          <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+            <Stat label="Piezas en inventario" value={fmtInt(inv.piezas)} tone="brand" />
+            <Stat label="Disponibles para venta" value={fmtInt(inv.disponibles)} />
+            <Stat label="En tránsito" value={fmtInt(inv.enTransito)} />
+            {inv.valor !== undefined && <Stat label="Valor del inventario" value={fmtMoney(inv.valor)} hint="Al costo de sus lotes (FIFO), sin IVA" />}
+            <Stat label="Ajustes por autorizar" value={fmtInt(inv.ajustesPorAutorizar)} />
+            <Stat label="Transferencias en tránsito" value={fmtInt(inv.transferenciasEnTransito)} />
+          </div>
+          <div className="mb-3 grid gap-3 lg:grid-cols-3">
+            <Panel title="Inventario por almacén" className="lg:col-span-2" bodyClassName="p-0" actions={<Link href="/inventario" className="text-xs text-brand hover:underline">Ver existencias</Link>}>
+              <table className="w-full text-sm">
+                <thead className="bg-page text-xs text-ink-soft">
+                  <tr>
+                    <th className="px-3 py-1.5 text-left">Almacén</th>
+                    <th className="px-3 py-1.5 text-right">SKU con stock</th>
+                    <th className="px-3 py-1.5 text-right">Físico</th>
+                    <th className="px-3 py-1.5 text-right">Apartado</th>
+                    <th className="px-3 py-1.5 text-right">Disponible</th>
+                    <th className="px-3 py-1.5 text-right">Por llegar</th>
+                    {inv.valor !== undefined && <th className="px-3 py-1.5 text-right">Valor</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {inv.porAlmacen.map((w) => (
+                    <tr key={w.id} className="border-t border-line">
+                      <td className="px-3 py-1.5">
+                        <Link href={`/inventario?warehouseId=${w.id}`} className="font-medium text-brand hover:underline">{w.code}</Link>{' '}
+                        <span className="text-xs text-ink-soft">{w.name}</span>
+                      </td>
+                      <td className="num px-3 py-1.5">{fmtInt(w.skus)}</td>
+                      <td className="num px-3 py-1.5"><StockQty value={w.onHand} /></td>
+                      <td className="num px-3 py-1.5"><StockQty value={w.reserved} /></td>
+                      <td className="num px-3 py-1.5"><StockQty value={w.available} strong /></td>
+                      <td className="num px-3 py-1.5"><StockQty value={w.inTransit} /></td>
+                      {inv.valor !== undefined && <td className="num px-3 py-1.5">{fmtMoney(w.value)}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Panel>
+            <Panel title="Pendientes de inventario" bodyClassName="p-0">
+              <ul>
+                {alertas.map((a) => (
+                  <li key={a.label} className="border-b border-line last:border-0">
+                    <Link href={a.href} className="flex items-center justify-between px-3 py-1.5 text-sm hover:bg-page">
+                      <span>{a.label}</span>
+                      <span className={a.n > 0 ? (a.bad ? 'font-semibold text-bad' : 'font-semibold text-warn') : 'text-ink-faint'}>{fmtInt(a.n)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          </div>
+        </>
+      )}
 
       <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
         <Stat label="SKU maestros activos" value={fmtInt(d.skus.activos)} tone="brand" />

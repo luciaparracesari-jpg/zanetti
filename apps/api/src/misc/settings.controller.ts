@@ -1,5 +1,5 @@
 import { Body, Controller, Get, NotFoundException, Param, Patch } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { companySettings, currencies, systemParameters, taxRates, type Db } from '@erp/db';
 import { z } from 'zod';
 import { Perm } from '../auth/decorators';
@@ -68,7 +68,7 @@ export class SettingsController {
       if (!before) throw new NotFoundException('Parámetro no encontrado.');
       const [row] = await tx
         .update(systemParameters)
-        .set({ value: value as never, updatedById: actor.id })
+        .set({ value: value === null ? sql`'null'::jsonb` : (value as never), updatedById: actor.id })
         .where(eq(systemParameters.key, key))
         .returning();
       await this.audit.log(tx, actor, {
