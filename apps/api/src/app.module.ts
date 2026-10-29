@@ -31,6 +31,11 @@ import { SettingsController } from './misc/settings.controller';
 import { RolesController } from './users/roles.controller';
 import { UsersController } from './users/users.controller';
 import { WarehousesController } from './warehouses/warehouses.controller';
+import { AliasesController } from './replenishment/aliases.controller';
+import { ContainersController } from './replenishment/containers.controller';
+import { ReplenishmentController } from './replenishment/replenishment.controller';
+import { ReplenishmentService } from './replenishment/replenishment.service';
+import { SalesController } from './replenishment/sales.controller';
 
 @Module({
   imports: [
@@ -58,6 +63,10 @@ import { WarehousesController } from './warehouses/warehouses.controller';
     SettingsController,
     ImportsController,
     InventoryController,
+    ReplenishmentController,
+    SalesController,
+    ContainersController,
+    AliasesController,
     AdjustmentsController,
     TransfersController,
     CountsController,
@@ -71,6 +80,7 @@ import { WarehousesController } from './warehouses/warehouses.controller';
     AdjustmentsService,
     TransfersService,
     CountsService,
+    ReplenishmentService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

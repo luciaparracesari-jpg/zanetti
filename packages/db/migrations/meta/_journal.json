@@ -50,6 +50,20 @@
       "when": 1793239738629,
       "tag": "0006_valor_en_transito",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793303588056,
+      "tag": "0007_ventas_reabasto",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793303954963,
+      "tag": "0008_ajustes_reabasto",
+      "breakpoints": true
     }
   ]
 }

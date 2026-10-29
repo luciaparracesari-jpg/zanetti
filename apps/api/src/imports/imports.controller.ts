@@ -23,7 +23,7 @@ import { str } from '../common/listing';
 import { parse } from '../common/zod';
 import { ImportsService } from './imports.service';
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_BYTES = 15 * 1024 * 1024;
 
 /**
  * Importación de datos. Cada plantilla define sus propios permisos; el servicio los verifica

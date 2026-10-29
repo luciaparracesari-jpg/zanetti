@@ -16,11 +16,16 @@ import { countSql } from '../common/listing';
 import { AuditService } from '../audit/audit.service';
 import { normHeader, parseFile, UnsupportedFileError, type ParsedSheet } from './parse';
 import { initialStockTemplate } from './templates/initial-stock.template';
+import { containersTemplate } from './templates/containers.template';
 import { kitsTemplate } from './templates/kits.template';
+import { measuresTemplate } from './templates/measures.template';
+import { salesAmazonTemplate } from './templates/sales-amazon.template';
+import { salesLiverpoolTemplate } from './templates/sales-liverpool.template';
+import { salesShopifyTemplate } from './templates/sales-shopify.template';
 import { skusTemplate } from './templates/skus.template';
 import type { AnyTemplate, InputRow, RowMessage, RowValues, ValidatedRow } from './types';
 
-const TEMPLATES: AnyTemplate[] = [skusTemplate, kitsTemplate, initialStockTemplate];
+const TEMPLATES: AnyTemplate[] = [skusTemplate, kitsTemplate, initialStockTemplate, salesAmazonTemplate, salesLiverpoolTemplate, salesShopifyTemplate, containersTemplate, measuresTemplate];
 const MAX_ROWS = 5000;
 const HEADER_SCAN_ROWS = 20;
 
@@ -132,11 +137,13 @@ export class ImportsService {
     const fileMessages: RowMessage[] = [];
     if (sheets.length > 1) fileMessages.push({ level: 'info', message: `Se leyó la hoja “${sheet.sheetName}”.` });
     const seen = new Set<string>();
+    let ignored = 0;
     const colField: (string | null)[] = fields.map((f, i) => {
       const header = headerRow.cells[i];
       if (!header) return null;
       if (!f) {
-        fileMessages.push({ level: 'info', message: `Columna ignorada: “${header}”.` });
+        if (t.quietIgnoredColumns) ignored++;
+        else fileMessages.push({ level: 'info', message: `Columna ignorada: “${header}”.` });
         return null;
       }
       if (seen.has(f)) {
@@ -146,6 +153,7 @@ export class ImportsService {
       seen.add(f);
       return f;
     });
+    if (ignored) fileMessages.push({ level: 'info', message: `Se usan ${seen.size} columnas del reporte; las otras ${ignored} no se necesitan.` });
 
     const inputs: InputRow[] = [];
     for (const row of sheet.rows) {
@@ -158,7 +166,8 @@ export class ImportsService {
       inputs.push({ rowNumber: row.rowNumber, values, skipped: false });
     }
     if (!inputs.length) throw new UnprocessableEntityException('El archivo no tiene renglones con datos debajo del encabezado.');
-    if (inputs.length > MAX_ROWS) throw new UnprocessableEntityException(`El archivo tiene ${inputs.length} renglones; el máximo por carga es ${MAX_ROWS}. Divídelo en varios archivos.`);
+    const maxRows = t.maxRows ?? MAX_ROWS;
+    if (inputs.length > maxRows) throw new UnprocessableEntityException(`El archivo tiene ${inputs.length} renglones; el máximo por carga es ${maxRows}. Divídelo en varios archivos.`);
 
     const validated = await t.validate(this.db, inputs, actor);
     const byRow = new Map(validated.map((v) => [v.rowNumber, v]));

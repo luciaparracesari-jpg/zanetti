@@ -4,3 +4,4 @@ export * from './numbers';
 export * from './inventory';
 export * from './reservations';
 export * from './kits';
+export * from './replenishment';

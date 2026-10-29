@@ -72,3 +72,16 @@ export const adjustmentReason = pgEnum('adjustment_reason', [
   'OTRO',
 ]);
 export const countStatus = pgEnum('count_status', ['ABIERTO', 'CERRADO', 'CANCELADO']);
+
+// ── Ventas y reabasto ──
+export const saleLineKind = pgEnum('sale_line_kind', ['VENTA', 'DEVOLUCION']);
+export const saleSource = pgEnum('sale_source', ['IMPORTACION', 'API']);
+export const containerStatus = pgEnum('container_status', [
+  'PLANEADO',
+  'EN_PRODUCCION',
+  'EN_NAVIERA',
+  'EN_ADUANA',
+  'RECIBIDO',
+  'PERDIDO',
+  'CANCELADO',
+]);

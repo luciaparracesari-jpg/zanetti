@@ -57,7 +57,13 @@ async function parseXlsx(buf: Buffer): Promise<ParsedSheet[]> {
     const rows: ParsedRow[] = [];
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       const cells: (string | null)[] = [];
-      for (let c = 1; c <= Math.max(row.cellCount, ws.columnCount); c++) cells.push(cellText(row.getCell(c).value));
+      // Sólo las celdas con valor: algunas hojas traen formato hasta la columna XFD y recorrer todas las columnas es lentísimo.
+      row.eachCell({ includeEmpty: false }, (cell, col) => {
+        const t = cellText(cell.value);
+        if (t === null) return;
+        while (cells.length < col - 1) cells.push(null);
+        cells[col - 1] = t;
+      });
       while (cells.length && cells[cells.length - 1] === null) cells.pop();
       if (cells.some((x) => x !== null)) rows.push({ rowNumber, cells });
     });

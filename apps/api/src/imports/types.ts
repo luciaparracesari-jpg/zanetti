@@ -51,6 +51,10 @@ export interface ImportTemplate<P = unknown> {
   /** Permisos necesarios para cargar, revisar y aplicar. */
   permissions: PermissionKey[];
   columns: ColumnDef[];
+  /** Máximo de renglones por archivo (por omisión 5,000). */
+  maxRows?: number;
+  /** Reportes de canal con muchas columnas: un solo aviso por las columnas que no se usan. */
+  quietIgnoredColumns?: boolean;
   /** Valida todos los renglones juntos (los duplicados dentro del archivo dependen de los demás). */
   validate(db: DbOrTx, rows: InputRow[], actor: Actor): Promise<ValidatedRow<P>[]>;
   /** Aplica los planes ya validados dentro de la transacción. Devuelve conteos para el resumen. */

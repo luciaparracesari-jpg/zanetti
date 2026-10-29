@@ -260,6 +260,11 @@ export const skuPackages = pgTable(
     code: text().notNull(),
     type: packageType().notNull().default('CAJA_MASTER'),
     unitsPerPackage: integer().notNull(),
+    /** Medidas exteriores de la caja en milímetros y peso bruto en gramos (para CBM y contenedores). */
+    lengthMm: integer(),
+    widthMm: integer(),
+    heightMm: integer(),
+    grossWeightG: integer(),
     createdAt: createdAt(),
   },
   (t) => [
