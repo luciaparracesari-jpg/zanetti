@@ -15,6 +15,8 @@ export interface InitialStockPlan {
   unitCost: string | null;
   lotCode: string | null;
   receivedAt: string | null;
+  /** PROVISIONAL cuando el costo es estimado (o falta) y debe confirmarse después. */
+  costStatus: 'FINAL' | 'PROVISIONAL';
   /** Texto para la vista previa. */
   label: string;
 }
@@ -78,7 +80,8 @@ export const initialStockTemplate: ImportTemplate<InitialStockPlan> = {
     { field: 'qty', header: 'CANTIDAD', aliases: ['PIEZAS', 'EXISTENCIA', 'STOCK', 'UNIDADES'], required: true, example: '120', help: 'Piezas físicas (entero). Un 0 se ignora.' },
     { field: 'cost', header: 'COSTO UNITARIO', aliases: ['COSTO', 'COSTO UNITARIO SIN IVA', 'COSTO MXN'], example: '85.50', help: 'Costo por pieza en MXN sin IVA, puesto en almacén. Si falta se usa el costo actual del SKU y el lote queda con costo provisional.' },
     { field: 'lot', header: 'LOTE', aliases: ['NUMERO DE LOTE', 'LOTE PROVEEDOR'], example: 'PO-2026-014', help: 'Opcional. Si el mismo lote está en varios almacenes, repítelo con el mismo costo.' },
-    { field: 'receivedAt', header: 'FECHA ENTRADA', aliases: ['FECHA', 'FECHA DE ENTRADA', 'FECHA RECEPCION'], example: '2026-09-30', help: 'Fecha en que entró la mercancía (define el orden FIFO). Formato AAAA-MM-DD o DD/MM/AAAA. Si falta, hoy.' },
+    { field: 'costStatus', header: 'ESTADO DEL COSTO', aliases: ['ESTADO COSTO', 'TIPO DE COSTO'], example: 'FINAL', help: 'FINAL o PROVISIONAL. Usa PROVISIONAL si el costo es estimado (por ejemplo, de otro contenedor). Si falta: FINAL cuando hay costo y PROVISIONAL cuando no.' },
+    { field: 'receivedAt', header: 'FECHA ENTRADA', aliases: ['FECHA', 'FECHA DE ENTRADA', 'FECHA RECEPCION'], example: '2026-09-30', help: 'Fecha en que entró la mercancía (define el orden FIFO). Formato AAAA-MM-DD o DD/MM/AAAA. Si falta, se usa la fecha de carga y el orden del archivo: de arriba hacia abajo, del lote más antiguo al más reciente.' },
   ],
 
   async validate(db: DbOrTx, rows: InputRow[], actor: Actor): Promise<ValidatedRow<InitialStockPlan>[]> {
@@ -173,6 +176,14 @@ export const initialStockTemplate: ImportTemplate<InitialStockPlan> = {
           message: fallback ? `Sin costo: se usará el costo actual del SKU (${Number(fallback).toFixed(2)}) como provisional.` : 'Sin costo y el SKU no tiene costo: el lote queda en 0 como provisional. Captúralo antes de calcular márgenes.',
         });
 
+      const statusRaw = up(v(r, 'costStatus'));
+      let costStatus: 'FINAL' | 'PROVISIONAL' = c.value ? 'FINAL' : 'PROVISIONAL';
+      if (statusRaw) {
+        if (statusRaw === 'FINAL' || statusRaw === 'PROVISIONAL') costStatus = statusRaw;
+        else err('costStatus', 'Usa FINAL o PROVISIONAL.');
+        if (statusRaw === 'FINAL' && !c.value) err('costStatus', 'Un costo FINAL necesita costo unitario.');
+      }
+
       const lot = v(r, 'lot')?.trim() || null;
       if (lot && lot.length > 40) err('lot', 'El lote admite hasta 40 caracteres.');
       const d = parseDate(v(r, 'receivedAt'));
@@ -188,10 +199,10 @@ export const initialStockTemplate: ImportTemplate<InitialStockPlan> = {
           lotCost.set(lk, (lotCost.get(lk) ?? new Set()).add(c.value));
         }
       }
-      return { r, m, sku, wh, loc, q, c, lot, d, fallback };
+      return { r, m, sku, wh, loc, q, c, lot, d, fallback, costStatus };
     });
 
-    return prelim.map(({ r, m, sku, wh, loc, q, c, lot, d, fallback }): ValidatedRow<InitialStockPlan> => {
+    return prelim.map(({ r, m, sku, wh, loc, q, c, lot, d, fallback, costStatus }): ValidatedRow<InitialStockPlan> => {
       if (!r.skipped) {
         const k = keyOf.get(r.rowNumber);
         const dups = k ? (keyIdx.get(k) ?? []).filter((n) => n !== r.rowNumber) : [];
@@ -228,7 +239,8 @@ export const initialStockTemplate: ImportTemplate<InitialStockPlan> = {
           unitCost: c.value,
           lotCode: lot,
           receivedAt: d.value,
-          label: `${q.value} pzas de ${sku.skuCode} en ${wh.code}/${loc?.code ?? 'GEN'}${cost ? ` a ${Number(cost).toFixed(2)}` : ''}${lot ? ` · lote ${lot}` : ''}`,
+          costStatus,
+          label: `${q.value} pzas de ${sku.skuCode} en ${wh.code}/${loc?.code ?? 'GEN'}${cost ? ` a ${Number(cost).toFixed(2)}${costStatus === 'PROVISIONAL' ? ' (provisional)' : ''}` : ''}${lot ? ` · lote ${lot}` : ''}`,
         },
       };
     });
@@ -237,6 +249,7 @@ export const initialStockTemplate: ImportTemplate<InitialStockPlan> = {
   async apply(tx: Tx, rows, ctx) {
     let units = 0;
     const lots = new Set<string>();
+    const lastCost = new Map<string, string>();
     const ordered = [...rows].sort((a, b) => a.plan.skuId.localeCompare(b.plan.skuId) || a.rowNumber - b.rowNumber);
     for (const { rowNumber, plan } of ordered) {
       if (plan.qty <= 0) continue;
@@ -250,7 +263,7 @@ export const initialStockTemplate: ImportTemplate<InitialStockPlan> = {
         lot: {
           code: plan.lotCode,
           receivedAt: plan.receivedAt ? new Date(`${plan.receivedAt}T12:00:00-06:00`) : null,
-          costStatus: plan.unitCost ? 'FINAL' : 'PROVISIONAL',
+          costStatus: plan.costStatus ?? (plan.unitCost ? 'FINAL' : 'PROVISIONAL'),
         },
         document: { type: 'IMPORTACION', id: ctx.batchId, folio: ctx.batchLabel.slice(0, 80), line: rowNumber },
         userId: ctx.actor.id,
@@ -261,13 +274,14 @@ export const initialStockTemplate: ImportTemplate<InitialStockPlan> = {
         units += plan.qty;
         for (const l of r.lines) if (l.lotId) lots.add(l.lotId);
       }
-      // El costo capturado se vuelve el costo actual del SKU si aún no tenía.
-      if (plan.unitCost) {
-        await tx
-          .update(masterSkus)
-          .set({ currentCost: plan.unitCost })
-          .where(and(eq(masterSkus.id, plan.skuId), isNull(masterSkus.currentCost)));
-      }
+      // El último costo FINAL del archivo (el lote más reciente) será el costo actual del SKU si aún no tenía.
+      if (plan.unitCost && plan.costStatus !== 'PROVISIONAL') lastCost.set(plan.skuId, plan.unitCost);
+    }
+    for (const [skuId, cost] of lastCost) {
+      await tx
+        .update(masterSkus)
+        .set({ currentCost: cost })
+        .where(and(eq(masterSkus.id, skuId), isNull(masterSkus.currentCost)));
     }
     await refreshAvgCost(tx, rows.map((r) => r.plan.skuId));
     await ctx.audit.log(tx, ctx.actor, {

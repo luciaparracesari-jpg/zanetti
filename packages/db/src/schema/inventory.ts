@@ -351,4 +351,6 @@ export const inventoryStock = pgView('inventory_stock', {
   inTransit: integer('in_transit').notNull(),
   available: integer('available').notNull(),
   value: numeric('value', { precision: 16, scale: 2 }).notNull(),
+  /** Valor al costo de lo enviado hacia este almacén y aún no recibido (migración 0006). */
+  inTransitValue: numeric('in_transit_value', { precision: 16, scale: 2 }).notNull(),
 }).existing();

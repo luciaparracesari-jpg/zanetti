@@ -33,6 +33,7 @@ interface Totals {
   inTransit: number;
   reserved: number;
   value?: string;
+  inTransitValue?: string;
 }
 
 export default function StockPage() {
@@ -133,6 +134,7 @@ export default function StockPage() {
                 { label: 'Disponible', value: fmtInt(t.available), tone: t.available < 0 ? 'bad' : undefined },
                 { label: 'En tránsito', value: fmtInt(t.inTransit), tone: t.inTransit ? 'warn' : undefined },
                 ...(t.value !== undefined ? [{ label: 'Valor al costo', value: fmtMoney(t.value) }] : []),
+                ...(t.inTransitValue !== undefined && Number(t.inTransitValue) > 0 ? [{ label: 'Valor en tránsito', value: fmtMoney(t.inTransitValue) }] : []),
               ]}
             />
           );

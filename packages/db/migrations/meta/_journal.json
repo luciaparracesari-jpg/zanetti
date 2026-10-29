@@ -43,6 +43,13 @@
       "when": 1793227476283,
       "tag": "0005_reglas_inventario",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793239738629,
+      "tag": "0006_valor_en_transito",
+      "breakpoints": true
     }
   ]
 }

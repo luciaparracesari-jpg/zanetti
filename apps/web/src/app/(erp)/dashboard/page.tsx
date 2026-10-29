@@ -24,6 +24,7 @@ interface Summary {
     disponibles: number;
     enTransito: number;
     valor?: string;
+    valorEnTransito?: string;
     negativos: number;
     sinExistencia: number;
     transferenciasEnTransito: number;
@@ -70,8 +71,8 @@ export default function DashboardPage() {
             <Stat label="Piezas en inventario" value={fmtInt(inv.piezas)} tone="brand" />
             <Stat label="Disponibles para venta" value={fmtInt(inv.disponibles)} />
             <Stat label="En tránsito" value={fmtInt(inv.enTransito)} />
-            {inv.valor !== undefined && <Stat label="Valor del inventario" value={fmtMoney(inv.valor)} hint="Al costo de sus lotes (FIFO), sin IVA" />}
-            <Stat label="Ajustes por autorizar" value={fmtInt(inv.ajustesPorAutorizar)} />
+            {inv.valor !== undefined && <Stat label="Valor en almacenes" value={fmtMoney(inv.valor)} hint="Al costo de sus lotes (FIFO), sin IVA" />}
+            {inv.valorEnTransito !== undefined && <Stat label="Valor en tránsito" value={fmtMoney(inv.valorEnTransito)} hint="Enviado a FBA / Liverpool y aún no recibido" />}
             <Stat label="Transferencias en tránsito" value={fmtInt(inv.transferenciasEnTransito)} />
           </div>
           <div className="mb-3 grid gap-3 lg:grid-cols-3">

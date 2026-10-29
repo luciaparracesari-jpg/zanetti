@@ -524,7 +524,10 @@ export async function refreshAvgCost(tx: DbOrTx, masterSkuIds: string[]): Promis
         SELECT b.master_sku_id, sum(b.qty * l.unit_cost) / sum(b.qty) AS avg
           FROM inventory_balances b
           JOIN inventory_lots l ON l.id = b.lot_id
-         WHERE b.qty > 0 AND b.master_sku_id IN (${sql.join(
+         WHERE b.qty > 0
+           -- Los lotes sin costo capturado (provisionales en 0) no bajan el promedio a cero.
+           AND NOT (l.cost_status = 'PROVISIONAL' AND l.unit_cost = 0)
+           AND b.master_sku_id IN (${sql.join(
            ids.map((id) => sql`${id}::uuid`),
            sql`, `,
          )})

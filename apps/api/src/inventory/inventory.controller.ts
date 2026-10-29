@@ -81,6 +81,7 @@ export class InventoryController {
              coalesce(sum(st.in_transit), 0)::int AS in_transit,
              coalesce(sum(st.available), 0)::int AS available,
              coalesce(sum(st.value), 0)::numeric(16, 2) AS value,
+             coalesce(sum(st.in_transit_value), 0)::numeric(16, 2) AS in_transit_value,
              s.avg_cost,
              coalesce(json_agg(json_build_object(
                'warehouseId', st.warehouse_id, 'code', w.code, 'onHand', st.on_hand, 'available', st.available,
@@ -111,7 +112,8 @@ export class InventoryController {
     const [totals] = (
       await this.db.execute<Row>(sql`SELECT count(*)::int AS total, coalesce(sum(on_hand), 0)::int AS on_hand,
         coalesce(sum(available), 0)::int AS available, coalesce(sum(in_transit), 0)::int AS in_transit,
-        coalesce(sum(reserved + committed), 0)::int AS reserved, coalesce(sum(value), 0)::numeric(16, 2) AS value
+        coalesce(sum(reserved + committed), 0)::int AS reserved, coalesce(sum(value), 0)::numeric(16, 2) AS value,
+        coalesce(sum(in_transit_value), 0)::numeric(16, 2) AS in_transit_value
         FROM (${base}) x`)
     ).rows;
     const rows = (await this.db.execute<Row>(sql`${base} ORDER BY ${order} LIMIT ${lq.pageSize} OFFSET ${(lq.page - 1) * lq.pageSize}`)).rows;
@@ -141,7 +143,7 @@ export class InventoryController {
         available: totals.available as number,
         inTransit: totals.in_transit as number,
         reserved: totals.reserved as number,
-        ...(costs ? { value: totals.value as string } : {}),
+        ...(costs ? { value: totals.value as string, inTransitValue: totals.in_transit_value as string } : {}),
       },
     };
   }

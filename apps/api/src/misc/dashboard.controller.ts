@@ -71,7 +71,8 @@ export class DashboardController {
                coalesce(sum(st.in_transit), 0)::int AS in_transit,
                coalesce(sum(st.reserved + st.committed), 0)::int AS reserved,
                count(st.master_sku_id) FILTER (WHERE st.on_hand > 0)::int AS skus,
-               coalesce(sum(st.value), 0)::numeric(16, 2) AS value
+               coalesce(sum(st.value), 0)::numeric(16, 2) AS value,
+               coalesce(sum(st.in_transit_value), 0)::numeric(16, 2) AS in_transit_value
           FROM warehouses w
           LEFT JOIN inventory_stock st ON st.warehouse_id = w.id
          WHERE w.status = 'ACTIVO' AND ${scope}
@@ -87,7 +88,7 @@ export class DashboardController {
       inTransit: r.in_transit as number,
       reserved: r.reserved as number,
       skus: r.skus as number,
-      ...(costs ? { value: r.value as string } : {}),
+      ...(costs ? { value: r.value as string, inTransitValue: r.in_transit_value as string } : {}),
     }));
     const [inv] = (
       await this.db.execute<Record<string, number>>(sql`
@@ -107,7 +108,12 @@ export class DashboardController {
       piezas: porAlmacen.reduce((a, w) => a + w.onHand, 0),
       disponibles: porAlmacen.reduce((a, w) => a + w.available, 0),
       enTransito: porAlmacen.reduce((a, w) => a + w.inTransit, 0),
-      ...(costs ? { valor: porAlmacen.reduce((a, w) => a + Number(w.value ?? 0), 0).toFixed(2) } : {}),
+      ...(costs
+        ? {
+            valor: porAlmacen.reduce((a, w) => a + Number(w.value ?? 0), 0).toFixed(2),
+            valorEnTransito: porAlmacen.reduce((a, w) => a + Number(w.inTransitValue ?? 0), 0).toFixed(2),
+          }
+        : {}),
       negativos: inv.negativos,
       sinExistencia: inv.sin_existencia,
       transferenciasEnTransito: inv.transferencias_transito,

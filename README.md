@@ -54,7 +54,9 @@ Menú **Inventario**. Todo cambio de existencia pasa por un solo motor (`package
 
 ### Cargar el inventario inicial
 
-**Inventario → Inventario inicial** (requiere autorizar ajustes y ver costos). Columnas: `SKU MAESTRO`, `ALMACEN` (APLIN, AMZ-FBA, LIV-FBL, LIV-99MIN; también FBA, FBL o 99 MIN), `UBICACION` (por omisión GEN), `CANTIDAD`, `COSTO UNITARIO` (MXN sin IVA), `LOTE` y `FECHA ENTRADA` (define el orden FIFO). Si falta el costo se usa el del SKU y el lote queda “provisional”. El mismo lote en varios almacenes se repite con el mismo costo.
+**Inventario → Inventario inicial** (requiere autorizar ajustes y ver costos). Columnas: `SKU MAESTRO`, `ALMACEN` (APLIN, AMZ-FBA, LIV-FBL, LIV-99MIN; también FBA, FBL o 99 MIN), `UBICACION` (por omisión GEN), `CANTIDAD`, `COSTO UNITARIO` (MXN sin IVA), `ESTADO DEL COSTO` (FINAL o PROVISIONAL, opcional), `LOTE` y `FECHA ENTRADA`. Sin fecha, el orden del archivo define el FIFO: de arriba hacia abajo, del lote más antiguo al más reciente. Si falta el costo, el lote queda en 0 como “provisional” y no cuenta para el costo promedio. El mismo lote en varios almacenes se repite con el mismo costo.
+
+Lo que ya va en camino a FBA se carga en APLIN y se manda con una transferencia APLIN → AMZ-FBA (autorizar y registrar envío): así queda “en tránsito” con su costo y el dashboard lo muestra aparte como valor en tránsito.
 
 ## Stack
 
