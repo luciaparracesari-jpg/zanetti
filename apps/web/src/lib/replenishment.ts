@@ -93,7 +93,7 @@ export interface ReplResult {
   months: string[];
   historyMonths: string[];
   params: ReplParams & { coberturaFba: number; coberturaFbl: number; diasContenedor: number; fechaProximoPedido: string; guardados: ReplParams };
-  containers: { id: string; code: string; status: string; eta: string | null; etaSource: string; etd: string | null; qty: number; skus: number; cbm: number }[];
+  containers: { id: string; code: string; status: string; eta: string | null; etaSource: string; etd: string | null; portEta: string | null; qty: number; skus: number; cbm: number }[];
   channels: ChannelRow[];
   china: ChinaRow[];
   fill: { days: number; cbm: number; minCbm: number; capacity: number; minDays: number; arrival: string };

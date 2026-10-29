@@ -77,6 +77,8 @@ export const importContainers = pgTable(
     status: containerStatus().notNull().default('EN_PRODUCCION'),
     /** Salida del barco; con ella la llegada es ETD + naviera + aduana. */
     etd: date({ mode: 'string' }),
+    /** Llegada al puerto (Manzanillo); con ella la llegada a APLIN es puerto + días de puerto, aduana y traslado. */
+    portEta: date({ mode: 'string' }),
     /** Llegada a APLIN capturada a mano (tiene prioridad sobre el cálculo). */
     etaOverride: date({ mode: 'string' }),
     capacityCbm: numeric({ precision: 8, scale: 2 }),

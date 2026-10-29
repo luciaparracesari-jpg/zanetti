@@ -15,6 +15,7 @@ export interface ContainerLinePlan {
   orderDate: string;
   status: ContainerStatus;
   etd: string | null;
+  portEta: string | null;
   eta: string | null;
   supplierName: string | null;
   unitCost: string | null;
@@ -50,6 +51,7 @@ export const containersTemplate: ImportTemplate<ContainerLinePlan> = {
     { field: 'orderDate', header: 'FECHA DEL PEDIDO', aliases: ['FECHA PEDIDO'], required: true, example: '2026-11-05', help: 'Fecha en que se hizo el pedido al proveedor.' },
     { field: 'status', header: 'ESTADO', example: 'EN PRODUCCION', help: 'EN PRODUCCION, EN NAVIERA, EN ADUANA, PERDIDO o CANCELADO.' },
     { field: 'etd', header: 'ETD', aliases: ['ETD (SALIDA DEL BARCO)', 'SALIDA DEL BARCO'], help: 'Salida del barco, si ya se conoce.' },
+    { field: 'portEta', header: 'LLEGADA A PUERTO', aliases: ['LLEGADA A MANZANILLO', 'ETA PUERTO', 'FECHA EN PUERTO'], help: 'Llegada al puerto (Manzanillo), si se conoce: la llegada a APLIN es esta fecha + los días de puerto, aduana y traslado.' },
     { field: 'eta', header: 'FECHA ESTIMADA EN APLIN', aliases: ['LLEGADA A APLIN', 'ETA'], help: 'Llegada a APLIN, si se conoce (tiene prioridad sobre el cálculo).' },
     { field: 'supplier', header: 'PROVEEDOR', help: 'Zanetti, Lean Travel… (se crea si no existe).' },
     { field: 'unitCost', header: 'COSTO UNITARIO', help: 'Costo puesto en almacén sin IVA (opcional).' },
@@ -90,6 +92,8 @@ export const containersTemplate: ImportTemplate<ContainerLinePlan> = {
       if (!status) err('status', `Estado no reconocido: “${v.status}”.`);
       const etd = v.etd ? parseSaleDate(v.etd) : null;
       if (v.etd && !etd) err('etd', `ETD inválido: “${v.etd}”.`);
+      const portEta = v.portEta ? parseSaleDate(v.portEta) : null;
+      if (v.portEta && !portEta) err('portEta', `Llegada a puerto inválida: “${v.portEta}”.`);
       const eta = v.eta ? parseSaleDate(v.eta) : null;
       if (v.eta && !eta) err('eta', `Fecha estimada inválida: “${v.eta}”.`);
       const cost = parseNumber(v.unitCost);
@@ -113,6 +117,7 @@ export const containersTemplate: ImportTemplate<ContainerLinePlan> = {
           orderDate: orderDate!,
           status: status!,
           etd,
+          portEta,
           eta,
           supplierName: v.supplier?.trim() || null,
           unitCost: cost === null ? null : cost.toFixed(4),
@@ -145,16 +150,17 @@ export const containersTemplate: ImportTemplate<ContainerLinePlan> = {
       const terminal = statuses.find((s) => s === 'PERDIDO' || s === 'CANCELADO');
       const status = terminal ?? STATUS_ORDER.find((s) => statuses.includes(s)) ?? 'EN_PRODUCCION';
       const etd = lines.map((l) => l.etd).filter(Boolean).sort().pop() ?? null;
+      const portEta = lines.map((l) => l.portEta).filter(Boolean).sort().pop() ?? null;
       const eta = lines.map((l) => l.eta).filter(Boolean).sort().pop() ?? null;
       let [c] = await tx.select({ id: importContainers.id }).from(importContainers).where(sql`upper(${importContainers.code}) = ${code}`);
       if (c) {
-        await tx.update(importContainers).set({ status, etd, etaOverride: eta, updatedById: ctx.actor.id }).where(eq(importContainers.id, c.id));
+        await tx.update(importContainers).set({ status, etd, portEta, etaOverride: eta, updatedById: ctx.actor.id }).where(eq(importContainers.id, c.id));
         await tx.delete(importContainerLines).where(eq(importContainerLines.containerId, c.id));
         counts.contenedoresActualizados++;
       } else {
         [c] = await tx
           .insert(importContainers)
-          .values({ code, status, etd, etaOverride: eta, createdById: ctx.actor.id, updatedById: ctx.actor.id })
+          .values({ code, status, etd, portEta, etaOverride: eta, createdById: ctx.actor.id, updatedById: ctx.actor.id })
           .returning({ id: importContainers.id });
         counts.contenedoresCreados++;
       }

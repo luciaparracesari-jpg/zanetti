@@ -62,6 +62,7 @@ export class ContainersController {
       z.object({
         status: z.enum(STATUS).optional(),
         etd: isoDate.nullable().optional(),
+        portEta: isoDate.nullable().optional(),
         etaOverride: isoDate.nullable().optional(),
         capacityCbm: z.number().positive().max(200).nullable().optional(),
         notes: z.string().trim().max(1000).nullable().optional(),

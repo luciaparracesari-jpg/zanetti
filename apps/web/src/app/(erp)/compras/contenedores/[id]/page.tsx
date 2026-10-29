@@ -30,6 +30,7 @@ interface Container {
   code: string;
   status: string;
   etd: string | null;
+  portEta: string | null;
   etaOverride: string | null;
   eta: string | null;
   etaSource: string;
@@ -43,7 +44,7 @@ interface Container {
 }
 
 const EDITABLE = ['PLANEADO', 'EN_PRODUCCION', 'EN_NAVIERA', 'EN_ADUANA', 'PERDIDO', 'CANCELADO'];
-const SOURCE: Record<string, string> = { MANUAL: 'capturada a mano', ETD: 'ETD + naviera + aduana', PEDIDO: 'fecha del pedido + lead time de lo más lento' };
+const SOURCE: Record<string, string> = { MANUAL: 'capturada a mano', PUERTO: 'llegada a puerto + días de puerto, aduana y traslado', ETD: 'ETD + naviera + aduana', PEDIDO: 'fecha del pedido + lead time de lo más lento' };
 
 export default function ContainerPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +61,7 @@ function Detail({ c }: { c: Container }) {
   const { can } = useSession();
   const [status, setStatus] = useState(c.status);
   const [etd, setEtd] = useState(c.etd ?? '');
+  const [port, setPort] = useState(c.portEta ?? '');
   const [eta, setEta] = useState(c.etaOverride ?? '');
   const [notes, setNotes] = useState(c.notes ?? '');
   const [busy, setBusy] = useState(false);
@@ -74,7 +76,7 @@ function Detail({ c }: { c: Container }) {
     setBusy(true);
     setError(null);
     try {
-      await patch(`/containers/${c.id}`, { status, etd: etd || null, etaOverride: eta || null, notes: notes || null });
+      await patch(`/containers/${c.id}`, { status, etd: etd || null, portEta: port || null, etaOverride: eta || null, notes: notes || null });
       toast.ok('Contenedor actualizado.');
       refresh();
     } catch (e) {
@@ -132,7 +134,7 @@ function Detail({ c }: { c: Container }) {
       </div>
       {!received && can('compras.editar') && (
         <Panel title="Seguimiento" className="mb-3">
-          <div className="grid gap-3 md:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-6">
             <Field label="Estado">
               <Select value={status} onChange={(e) => setStatus(e.target.value)}>
                 {EDITABLE.map((s) => <option key={s} value={s}>{CONTAINER_STATUS[s]}</option>)}
@@ -140,6 +142,9 @@ function Detail({ c }: { c: Container }) {
             </Field>
             <Field label="ETD (salida del barco)">
               <Input type="date" value={etd} onChange={(e) => setEtd(e.target.value)} />
+            </Field>
+            <Field label="Llegada a puerto" hint="Manzanillo. Más los días de puerto, aduana y traslado.">
+              <Input type="date" value={port} onChange={(e) => setPort(e.target.value)} />
             </Field>
             <Field label="Llegada a APLIN (si la sabes)" hint="Tiene prioridad sobre el cálculo.">
               <Input type="date" value={eta} onChange={(e) => setEta(e.target.value)} />

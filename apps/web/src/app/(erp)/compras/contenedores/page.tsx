@@ -15,8 +15,9 @@ interface Row {
   code: string;
   status: string;
   eta: string | null;
-  etaSource: 'MANUAL' | 'ETD' | 'PEDIDO';
+  etaSource: 'MANUAL' | 'PUERTO' | 'ETD' | 'PEDIDO';
   etd: string | null;
+  portEta: string | null;
   lastOrderDate: string | null;
   qty: number;
   skus: number;
@@ -29,7 +30,7 @@ const TONE: Record<string, 'ok' | 'warn' | 'bad' | 'info' | 'neutral'> = {
   PLANEADO: 'info', EN_PRODUCCION: 'warn', EN_NAVIERA: 'warn', EN_ADUANA: 'warn', RECIBIDO: 'ok', PERDIDO: 'bad', CANCELADO: 'neutral',
 };
 const containerBadge = (s: string) => <Badge tone={TONE[s] ?? 'neutral'}>{CONTAINER_STATUS[s] ?? s}</Badge>;
-const SOURCE: Record<string, string> = { MANUAL: 'capturada', ETD: 'ETD + naviera + aduana', PEDIDO: 'pedido + lead time' };
+const SOURCE: Record<string, string> = { MANUAL: 'capturada', PUERTO: 'llegada a puerto + puerto, aduana y traslado', ETD: 'ETD + naviera + aduana', PEDIDO: 'pedido + lead time' };
 
 export default function ContainersPage() {
   const q = useQuery({ queryKey: ['/containers'], queryFn: () => get<Row[]>('/containers') });
@@ -38,6 +39,7 @@ export default function ContainersPage() {
     { id: 'status', header: 'Estado', cell: (r) => containerBadge(r.status), value: (r) => CONTAINER_STATUS[r.status] },
     { id: 'order', header: 'Último pedido', cell: (r) => fmtDate(r.lastOrderDate), value: (r) => r.lastOrderDate },
     { id: 'etd', header: 'ETD', cell: (r) => fmtDate(r.etd), value: (r) => r.etd },
+    { id: 'port', header: 'Llega a puerto', cell: (r) => fmtDate(r.portEta), value: (r) => r.portEta },
     { id: 'eta', header: 'Llega a APLIN', cell: (r) => (r.status === 'RECIBIDO' ? <span className="text-ink-soft">recibido {fmtDate(r.receivedAt?.slice(0, 10))}</span> : <span title={SOURCE[r.etaSource]}>{fmtDate(r.eta)}</span>), value: (r) => r.eta },
     { id: 'skus', header: 'SKU', align: 'right', cell: (r) => fmtInt(r.skus), value: (r) => r.skus },
     { id: 'qty', header: 'Piezas', align: 'right', cell: (r) => fmtInt(r.qty), value: (r) => r.qty },

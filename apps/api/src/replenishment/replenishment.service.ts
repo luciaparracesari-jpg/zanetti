@@ -145,7 +145,10 @@ export class ReplenishmentService {
 
   // ───────────────────────────── Contenedores ─────────────────────────────
 
-  /** Contenedores con su llegada estimada: captura manual > ETD + naviera + aduana > pedido + lead time (lo más lento). */
+  /**
+   * Contenedores con su llegada estimada a APLIN: captura manual > llegada a puerto + aduana > ETD + naviera + aduana >
+   * pedido + lead time (lo más lento).
+   */
   async containers(p: StoredParams, statuses: readonly string[] | null) {
     const rows = await this.db
       .select()
@@ -169,12 +172,13 @@ export class ReplenishmentService {
     return rows.map((c) => {
       const ls = lines.filter((l) => l.containerId === c.id);
       const byLines = maxDate(ls.map((l) => addDays(l.orderDate, l.lead ?? 115)));
-      const eta = c.etaOverride ?? (c.etd ? addDays(c.etd, p.navieraDias + p.aduanaDias) : byLines);
+      const eta =
+        c.etaOverride ?? (c.portEta ? addDays(c.portEta, p.aduanaDias) : c.etd ? addDays(c.etd, p.navieraDias + p.aduanaDias) : byLines);
       const cbm = ls.reduce((a, l) => a + (l.caseUnits && l.cbmCase ? (l.qty / l.caseUnits) * Number(l.cbmCase) : 0), 0);
       return {
         ...c,
         eta,
-        etaSource: c.etaOverride ? 'MANUAL' : c.etd ? 'ETD' : 'PEDIDO',
+        etaSource: c.etaOverride ? 'MANUAL' : c.portEta ? 'PUERTO' : c.etd ? 'ETD' : 'PEDIDO',
         lastOrderDate: maxDate(ls.map((l) => l.orderDate)),
         qty: ls.reduce((a, l) => a + l.qty, 0),
         skus: new Set(ls.map((l) => l.skuId)).size,
@@ -318,7 +322,7 @@ export class ReplenishmentService {
       months,
       historyMonths: months.slice(-p.mesesHistoria),
       params: { ...params, guardados: p, fechaProximoPedidoSugerida: fechaProximoPedido },
-      containers: conts.map((c) => ({ id: c.id, code: c.code, status: c.status, eta: c.eta, etaSource: c.etaSource, etd: c.etd, qty: c.qty, skus: c.skus, cbm: c.cbm })),
+      containers: conts.map((c) => ({ id: c.id, code: c.code, status: c.status, eta: c.eta, etaSource: c.etaSource, etd: c.etd, portEta: c.portEta, qty: c.qty, skus: c.skus, cbm: c.cbm })),
       channels: channelsOut,
       china,
       fill: { ...result.fill, arrival: addDays(fechaProximoPedido, params.diasContenedor) },

@@ -169,6 +169,15 @@ test('ventas importadas, contenedores, medidas y cálculo de reabasto', async ()
   assert.equal(p.status, 200);
   assert.equal((await req('PATCH', '/replenishment/params', { mesesHistoria: 40 })).status, 422);
 
+  // Llegada a APLIN: ETD + naviera + aduana; con llegada a puerto, puerto + aduana; la fecha capturada manda.
+  const eta = async () => (await req('GET', `/containers/${c.id}`)).body;
+  assert.equal((await req('PATCH', `/containers/${c.id}`, { etd: '2026-10-01' })).status, 200);
+  assert.deepEqual(await eta().then((x) => [x.eta, x.etaSource]), ['2026-11-25', 'ETD']);
+  await req('PATCH', `/containers/${c.id}`, { portEta: '2026-11-09' });
+  assert.deepEqual(await eta().then((x) => [x.eta, x.etaSource]), ['2026-11-24', 'PUERTO']);
+  await req('PATCH', `/containers/${c.id}`, { etaOverride: '2026-11-20' });
+  assert.deepEqual(await eta().then((x) => [x.eta, x.etaSource]), ['2026-11-20', 'MANUAL']);
+
   // Recibir el contenedor en APLIN: entran lotes con su costo (provisional si no hay).
   const rec = await req('POST', `/containers/${c.id}/receive`, { receivedAt: '2027-01-14' });
   assert.equal(rec.status, 201, JSON.stringify(rec.body));

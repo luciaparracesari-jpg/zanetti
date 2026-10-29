@@ -534,7 +534,7 @@ const PARAM_FIELDS: { key: keyof ReplParams; label: string; hint?: string; step?
   { group: 'Envíos', key: 'colchonFbl', label: 'Colchón Liverpool (días)' },
   { group: 'Envíos', key: 'reservaAplinDias', label: 'Reserva en APLIN para Shopify (días)' },
   { group: 'China', key: 'navieraDias', label: 'Naviera (días)' },
-  { group: 'China', key: 'aduanaDias', label: 'Puerto, aduana y traslado (días)' },
+  { group: 'China', key: 'aduanaDias', label: 'Puerto, aduana y traslado (días)', hint: 'De la llegada a Manzanillo a disponible en APLIN.' },
   { group: 'China', key: 'cicloDias', label: 'Ciclo entre contenedores (días)' },
   { group: 'China', key: 'seguridadDias', label: 'Días de seguridad' },
   { group: 'China', key: 'capacidadCbm', label: 'Capacidad del contenedor (CBM)', step: '0.5' },
