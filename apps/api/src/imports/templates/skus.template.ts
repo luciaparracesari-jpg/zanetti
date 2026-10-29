@@ -44,6 +44,13 @@ export interface SkuPlan {
   priceChange: boolean;
   cost: string | null;
   costChange: boolean;
+  /** Días desde el pedido al proveedor hasta que la mercancía está en APLIN. */
+  leadTimeDays: number | null;
+  leadTimeChange: boolean;
+  safetyDays: number | null;
+  safetyChange: boolean;
+  /** SKU existente cuyo producto no tiene categoría: se le asigna esta. */
+  categoryAssign: { productId: string; path: string } | null;
   barcode: { code: string; type: 'EAN13' | 'UPC' | 'INTERNO'; primary: boolean } | null;
   listings: ListingPlan[];
   package: { code: string; units: number; mode: 'crear' | 'actualizar' } | null;
@@ -58,6 +65,13 @@ function parseDecimal(v: string | null, scale: number): { value: string | null; 
   const s = v.replace(/[$,\s]/g, '');
   if (!/^\d+(\.\d+)?$/.test(s)) return { value: null, ok: false };
   return { value: Number(s).toFixed(scale), ok: true };
+}
+
+function parseDays(v: string | null): { value: number | null; ok: boolean } {
+  if (!v) return { value: null, ok: true };
+  const n = Number(v.replace(/[,\s]/g, ''));
+  if (!Number.isInteger(n) || n < 0 || n > 730) return { value: null, ok: false };
+  return { value: n, ok: true };
 }
 
 function parseUnits(v: string | null): { value: number | null; ok: boolean } {
@@ -116,7 +130,7 @@ export const skusTemplate: ImportTemplate<SkuPlan> = {
     { field: 'name', header: 'NOMBRE', aliases: ['DESCRIPCION', 'NOMBRE DEL PRODUCTO', 'TITULO'], example: 'Caja organizadora 30 L', help: 'Nombre corto para tablas y etiquetas. Si falta, se usa el código del SKU.' },
     { field: 'productName', header: 'PRODUCTO', aliases: ['PRODUCTO PADRE', 'MODELO'], example: 'Caja organizadora', help: 'Agrupa variantes (talla, color, capacidad). Si falta, cada SKU es su propio producto.' },
     { field: 'brand', header: 'MARCA', example: 'Zanetti', help: 'Se crea si no existe. Sólo aplica a SKU nuevos.' },
-    { field: 'category', header: 'CATEGORIA', aliases: ['CATEGORÍA'], example: 'Hogar / Organización', help: 'Usa " / " para subcategorías. Se crea si no existe. Sólo aplica a SKU nuevos.' },
+    { field: 'category', header: 'CATEGORIA', aliases: ['CATEGORÍA'], example: 'Hogar / Organización', help: 'Usa " / " para subcategorías. Se crea si no existe. En un SKU existente sólo se asigna si su producto aún no tiene categoría.' },
     { field: 'liverpoolFbl', header: 'ID LIVERPOOL FBL/99 MIN', aliases: ['ID LIVERPOOL FBL', 'LIVERPOOL FBL', 'SKU OFERTA FBL', 'ID LIVERPOOL FBL 99 MIN'], example: '1138782090-FBL', help: 'SKU de oferta de Liverpool con stock en Liverpool. El número inicial es el artículo. Si contiene "99" se registra en 99 Minutos; si no, en FBL.' },
     { field: 'liverpoolVendor', header: 'ID LIVERPOOL VENDOR', aliases: ['LIVERPOOL VENDOR', 'SKU OFERTA VENDOR'], example: 'OF22', help: 'SKU de oferta Vendor; se surte desde la bodega APLIN.' },
     { field: 'asin', header: 'ASIN AMAZON', aliases: ['ASIN'], example: 'B0BWGHJ9SW', help: 'ASIN de Amazon; se registra con stock en Amazon FBA. Si el SKU maestro empieza con X00 se guarda también como FNSKU.' },
@@ -128,6 +142,8 @@ export const skusTemplate: ImportTemplate<SkuPlan> = {
     { field: 'caseUnits', header: 'PIEZAS CAJA MASTER', aliases: ['PIEZAS POR CAJA', 'PZAS CAJA MASTER'], example: '10', help: 'Piezas que trae la caja master. Sin piezas, la caja no se registra.' },
     { field: 'basePrice', header: 'PRECIO LISTA', aliases: ['PRECIO', 'PRECIO CON IVA'], help: 'Precio de lista con IVA (opcional).' },
     { field: 'cost', header: 'COSTO', aliases: ['COSTO UNITARIO'], help: 'Costo unitario sin IVA (opcional; requiere el permiso de costos).' },
+    { field: 'leadTimeDays', header: 'LEAD TIME (DIAS)', aliases: ['LEAD TIME', 'LEAD TIME DIAS', 'TIEMPO DE ENTREGA', 'DIAS DE REABASTO'], example: '115', help: 'Días desde que se hace el pedido al proveedor hasta que la mercancía está en APLIN (producción + naviera + aduana + traslado). Vacío = el del proveedor.' },
+    { field: 'safetyDays', header: 'DIAS DE SEGURIDAD', aliases: ['DIAS SEGURIDAD', 'COLCHON (DIAS)'], example: '21', help: 'Días extra de venta que se cubren por retrasos (opcional).' },
   ],
 
   async validate(db: DbOrTx, rows: InputRow[], actor: Actor): Promise<ValidatedRow<SkuPlan>[]> {
@@ -149,8 +165,19 @@ export const skusTemplate: ImportTemplate<SkuPlan> = {
     const allCodes = [...new Set([...fileSkuCodes, ...caseIdx.keys()])];
     const existingSkus = allCodes.length
       ? await db
-          .select({ id: masterSkus.id, skuCode: masterSkus.skuCode, name: masterSkus.name, basePrice: masterSkus.basePrice, currentCost: masterSkus.currentCost })
+          .select({
+            id: masterSkus.id,
+            skuCode: masterSkus.skuCode,
+            name: masterSkus.name,
+            basePrice: masterSkus.basePrice,
+            currentCost: masterSkus.currentCost,
+            leadTimeDays: masterSkus.leadTimeDays,
+            safetyDays: masterSkus.safetyDays,
+            productId: masterSkus.productId,
+            productCategoryId: products.categoryId,
+          })
           .from(masterSkus)
+          .innerJoin(products, eq(products.id, masterSkus.productId))
           .where(inArray(sql`upper(${masterSkus.skuCode})`, allCodes))
       : [];
     const skuByCode = new Map(existingSkus.map((s) => [s.skuCode.toUpperCase(), s]));
@@ -339,6 +366,7 @@ export const skusTemplate: ImportTemplate<SkuPlan> = {
       if (!existing && !nameIn) info('name', 'Sin nombre: se usará el código del SKU. Agrega la columna NOMBRE o edítalo después.');
       const nameChange = existing && nameIn && nameIn !== existing.name ? { from: existing.name, to: nameIn } : null;
       let product: SkuPlan['product'] = null;
+      let categoryAssign: SkuPlan['categoryAssign'] = null;
       if (!existing) {
         const pName = v(r, 'productName') ?? name;
         product = { name: pName, brand: v(r, 'brand'), category: v(r, 'category') };
@@ -347,8 +375,15 @@ export const skusTemplate: ImportTemplate<SkuPlan> = {
         else if (pl && (productRows.get(pl) ?? 0) > 1) info('productName', `Variante del producto “${pName}” (${productRows.get(pl)} SKU en el archivo).`);
         if (product.brand && !brandExists.has(product.brand.toLowerCase())) info('brand', `Se creará la marca “${product.brand}”.`);
         if (product.category && !catPathExists(product.category)) info('category', `Se creará la categoría “${product.category}”.`);
-      } else if (v(r, 'brand') || v(r, 'category') || v(r, 'productName')) {
-        info('productName', 'El SKU ya existe: producto, marca y categoría no se modifican desde la importación.');
+      } else {
+        const cat = v(r, 'category');
+        if (cat && !existing.productCategoryId) {
+          categoryAssign = { productId: existing.productId, path: cat };
+          info('category', `El producto no tenía categoría: se asigna “${cat}”${catPathExists(cat) ? '' : ' (se creará)'}.`);
+        } else if (cat) {
+          info('category', 'El producto ya tiene categoría; se cambia desde Productos, no desde la importación.');
+        }
+        if (v(r, 'brand') || v(r, 'productName')) info('productName', 'El SKU ya existe: producto y marca no se modifican desde la importación.');
       }
 
       // Precio y costo
@@ -359,6 +394,15 @@ export const skusTemplate: ImportTemplate<SkuPlan> = {
       if (cost.value && !can(actor, 'costos.ver')) err('cost', 'No tienes permiso para capturar costos.');
       const priceChange = Boolean(price.value && price.value !== existing?.basePrice);
       const costChange = Boolean(cost.value && cost.value !== existing?.currentCost);
+
+      // Reabasto
+      const lead = parseDays(v(r, 'leadTimeDays'));
+      if (!lead.ok) err('leadTimeDays', `El lead time debe ser un entero de 0 a 730 días (“${v(r, 'leadTimeDays')}”).`);
+      const safety = parseDays(v(r, 'safetyDays'));
+      if (!safety.ok) err('safetyDays', `Los días de seguridad deben ser un entero de 0 a 730 (“${v(r, 'safetyDays')}”).`);
+      const leadTimeChange = lead.value !== null && lead.value !== (existing?.leadTimeDays ?? null);
+      const safetyChange = safety.value !== null && safety.value !== (existing?.safetyDays ?? null);
+      if (existing && leadTimeChange && existing.leadTimeDays !== null) info('leadTimeDays', `Lead time de ${existing.leadTimeDays} a ${lead.value} días.`);
 
       // Código de barras
       let barcode: SkuPlan['barcode'] = null;
@@ -435,11 +479,16 @@ export const skusTemplate: ImportTemplate<SkuPlan> = {
         priceChange,
         cost: cost.value,
         costChange,
+        leadTimeDays: lead.value,
+        leadTimeChange,
+        safetyDays: safety.value,
+        safetyChange,
+        categoryAssign,
         barcode,
         listings,
         package: pkg,
       };
-      const changed = nameChange || priceChange || costChange || barcode || listings.length || pkg;
+      const changed = nameChange || priceChange || costChange || leadTimeChange || safetyChange || categoryAssign || barcode || listings.length || pkg;
       const action = !existing ? 'CREAR' : changed ? 'ACTUALIZAR' : 'SIN_CAMBIOS';
       return { rowNumber: r.rowNumber, messages, action, plan };
     });
@@ -536,6 +585,8 @@ export const skusTemplate: ImportTemplate<SkuPlan> = {
             name: plan.name,
             basePrice: plan.basePrice,
             currentCost: plan.cost,
+            leadTimeDays: plan.leadTimeDays,
+            safetyDays: plan.safetyDays,
             status: 'ACTIVO',
             createdById: actor.id,
             updatedById: actor.id,
@@ -549,6 +600,17 @@ export const skusTemplate: ImportTemplate<SkuPlan> = {
         if (plan.nameChange) { patch.name = plan.nameChange.to; done.push(`nombre: ${plan.nameChange.from} → ${plan.nameChange.to}`); }
         if (plan.priceChange) { patch.basePrice = plan.basePrice; done.push(`precio ${plan.basePrice}`); }
         if (plan.costChange) { patch.currentCost = plan.cost; done.push(`costo ${plan.cost}`); }
+        if (plan.leadTimeChange) { patch.leadTimeDays = plan.leadTimeDays; done.push(`lead time ${plan.leadTimeDays} días`); }
+        if (plan.safetyChange) { patch.safetyDays = plan.safetyDays; done.push(`seguridad ${plan.safetyDays} días`); }
+        if (plan.categoryAssign) {
+          const categoryId = await ensureCategory(plan.categoryAssign.path);
+          const upd = await tx
+            .update(products)
+            .set({ categoryId, updatedById: actor.id })
+            .where(and(eq(products.id, plan.categoryAssign.productId), isNull(products.categoryId)))
+            .returning({ id: products.id });
+          if (upd.length) done.push(`categoría ${plan.categoryAssign.path}`);
+        }
         if (Object.keys(patch).length) await tx.update(masterSkus).set({ ...patch, updatedById: actor.id }).where(eq(masterSkus.id, skuId));
         if (plan.priceChange) await tx.insert(priceHistory).values({ masterSkuId: skuId, price: plan.basePrice!, source: 'IMPORTACION', changedById: actor.id });
         if (plan.costChange) await tx.insert(costHistory).values({ masterSkuId: skuId, cost: plan.cost!, sourceType: 'IMPORTACION', changedById: actor.id });

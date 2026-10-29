@@ -53,6 +53,11 @@ export interface SkuPlan {
   package: { code: string; units: number; mode: string } | null;
   priceChange: boolean;
   costChange: boolean;
+  leadTimeDays?: number | null;
+  leadTimeChange?: boolean;
+  safetyDays?: number | null;
+  safetyChange?: boolean;
+  categoryAssign?: { productId: string; path: string } | null;
 }
 
 /** Etiquetas del resultado al aplicar. */
@@ -92,5 +97,8 @@ export function planSummary(plan: SkuPlan | { label: string } | null): string {
   if (p.package) parts.push(`caja ×${p.package.units}`);
   if (p.priceChange) parts.push('precio');
   if (p.costChange) parts.push('costo');
+  if (p.leadTimeChange) parts.push(`lead time ${p.leadTimeDays} d`);
+  if (p.safetyChange) parts.push(`seguridad ${p.safetyDays} d`);
+  if (p.categoryAssign) parts.push(`categoría ${p.categoryAssign.path}`);
   return parts.join(' · ') || 'sin cambios';
 }

@@ -145,4 +145,35 @@ test('importación de SKU maestro: validar, corregir, omitir, aplicar y reimport
   // Auditoría de la importación.
   const audit = await req('GET', `/audit-logs?action=APLICAR_IMPORTACION&q=${RUN}`);
   assert.ok(audit.body.total >= 1);
+
+  // Parámetros de reabasto en SKU existentes: lead time, días de seguridad y categoría (sólo si el producto no tiene).
+  const cat = `Reabasto ${RUN} / Sartenes`;
+  const params = await upload(
+    ['SKU MAESTRO,CATEGORIA,LEAD TIME (DIAS),DIAS DE SEGURIDAD', `${s('B')},${cat},115,21`, `${s('A')},,85,`, `${s('D')},,abc,`].join('\n'),
+  );
+  assert.equal(params.status, 201, JSON.stringify(params.body));
+  rows = (await req('GET', `/data-imports/${params.body.id}/rows`)).body.items;
+  const pd = rows.find((x) => x.values.skuCode === s('D'));
+  assert.ok(pd.messages.some((m) => m.field === 'leadTimeDays' && m.level === 'error'), 'lead time inválido');
+  await req('PATCH', `/data-imports/${params.body.id}/rows/${pd.id}`, { skipped: true });
+  const pb = rows.find((x) => x.values.skuCode === s('B'));
+  assert.equal(pb.action, 'ACTUALIZAR');
+  assert.equal(pb.plan.categoryAssign.path, cat);
+  const pApplied = await req('POST', `/data-imports/${params.body.id}/apply`, {});
+  assert.equal(pApplied.status, 200, JSON.stringify(pApplied.body));
+  assert.equal(pApplied.body.result.skusActualizados, 2);
+  assert.equal(pApplied.body.result.categoriasCreadas, 2);
+  const bId = (await req('GET', `/skus?q=${s('B')}`)).body.items.find((x) => x.skuCode === s('B')).id;
+  const bAfter = (await req('GET', `/skus/${bId}`)).body;
+  assert.equal(bAfter.leadTimeDays, 115);
+  assert.equal(bAfter.safetyDays, 21);
+  assert.equal(bAfter.product.category.name, 'Sartenes');
+  assert.equal((await req('GET', `/skus/${a.id}`)).body.leadTimeDays, 85);
+
+  // Con categoría ya asignada no se cambia desde la importación.
+  const again2 = await upload(['SKU MAESTRO,CATEGORIA,LEAD TIME (DIAS)', `${s('B')},Otra ${RUN},115`].join('\n'));
+  rows = (await req('GET', `/data-imports/${again2.body.id}/rows`)).body.items;
+  assert.equal(rows[0].action, 'SIN_CAMBIOS');
+  assert.ok(rows[0].messages.some((m) => m.field === 'category' && m.message.includes('ya tiene categoría')));
+  await req('POST', `/data-imports/${again2.body.id}/cancel`, {});
 });

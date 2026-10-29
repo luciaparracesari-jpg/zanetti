@@ -29,7 +29,7 @@ Menú **Productos → Importar desde Excel** (o el botón en SKU maestros):
 3. Revisa la vista previa: cada renglón dice si es válido, tiene advertencias o errores, y qué se hará (crear o actualizar). Haz clic en un renglón para corregirlo u omítelo.
 4. Confirma. Todo se aplica en una sola transacción; si algo cambió desde la vista previa, se revalida y no se importa nada con errores.
 
-La plantilla **SKU maestro y publicaciones** reconoce el formato de `ERP_ZANETTI.xlsx` (SKU MAESTRO, ID LIVERPOOL FBL/99 MIN, ID LIVERPOOL VENDOR, ASIN AMAZON, UPC-EAN, SKU CAJA MASTER, PIEZAS CAJA MASTER) y columnas opcionales: NOMBRE, PRODUCTO, MARCA, CATEGORIA, SKU AMAZON, SHOPIFY VARIANT ID, SKU SHOPIFY, PRECIO LISTA y COSTO. Reimportar el mismo archivo no duplica nada: sólo agrega lo que falta.
+La plantilla **SKU maestro y publicaciones** reconoce el formato de `ERP_ZANETTI.xlsx` (SKU MAESTRO, ID LIVERPOOL FBL/99 MIN, ID LIVERPOOL VENDOR, ASIN AMAZON, UPC-EAN, SKU CAJA MASTER, PIEZAS CAJA MASTER) y columnas opcionales: NOMBRE, PRODUCTO, MARCA, CATEGORIA, SKU AMAZON, SHOPIFY VARIANT ID, SKU SHOPIFY, PRECIO LISTA, COSTO, LEAD TIME (DIAS) y DIAS DE SEGURIDAD. Reimportar el mismo archivo no duplica nada: sólo agrega lo que falta. En un SKU existente se actualizan nombre, precio, costo, lead time y días de seguridad; la categoría sólo se asigna si su producto todavía no tiene (cambiarla es desde Productos). El lead time son los días desde el pedido al proveedor hasta que la mercancía está en APLIN.
 
 | Columna | Se registra como |
 | --- | --- |
