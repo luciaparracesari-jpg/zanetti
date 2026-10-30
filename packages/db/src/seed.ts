@@ -124,7 +124,7 @@ async function main() {
       },
       {
         key: 'reabasto.parametros',
-        value: {"mesesHistoria": 3, "pctQuiebre": 0.3, "factorFba": 1, "factorFbl": 1, "factorAplin": 1, "almexDias": 33, "dhlDias": 17, "colchonFba": 7, "envioFblDias": 10, "colchonFbl": 5, "reservaAplinDias": 30, "redondearCajas": true, "navieraDias": 40, "aduanaDias": 15, "cicloDias": 45, "seguridadDias": 21, "capacidadCbm": 68, "fechaProximoPedido": null, "origenAlmacen": {"AMZ-FBA": "AMZ-FBA", "AMZ-MFN": "AMZ-FBA", "LIVERPOOL": "LIV-FBL", "SHOPIFY": "APLIN"}},
+        value: {"mesesHistoria": 3, "pctQuiebre": 0.3, "factorFba": 1, "factorFbl": 1, "factorAplin": 1, "almexDias": 33, "dhlDias": 17, "colchonFba": 7, "envioFblDias": 10, "colchonFbl": 5, "reservaAplinDias": 30, "redondearCajas": true, "navieraDias": 52, "aduanaDias": 15, "cicloDias": 45, "seguridadDias": 21, "capacidadCbm": 68, "fechaProximoPedido": null, "origenAlmacen": {"AMZ-FBA": "AMZ-FBA", "AMZ-MFN": "AMZ-FBA", "LIVERPOOL": "LIV-FBL", "SHOPIFY": "APLIN"}, "minimoProduccion": {"Sartenes": 600, "Cocina": 300, "Viaje": 0}},
         description: 'Parámetros del cálculo de reabasto (venta base, envíos a FBA y Liverpool, contenedores). Se editan en Reabasto → Parámetros.',
       },
     ])

@@ -45,6 +45,8 @@ export const paramsSchema = z.object({
   capacidadCbm: z.number().min(1).max(200),
   fechaProximoPedido: isoDate.nullable(),
   origenAlmacen: z.record(z.string(), warehouseCode),
+  /** Mínimo de producción por SKU según su categoría (piezas; 0 = sin mínimo). */
+  minimoProduccion: z.record(z.string(), z.number().int().min(0).max(100_000)),
 });
 export type StoredParams = z.infer<typeof paramsSchema>;
 
@@ -61,13 +63,14 @@ export const DEFAULT_PARAMS: StoredParams = {
   colchonFbl: 5,
   reservaAplinDias: 30,
   redondearCajas: true,
-  navieraDias: 40,
+  navieraDias: 52,
   aduanaDias: 15,
   cicloDias: 45,
   seguridadDias: 21,
   capacidadCbm: 68,
   fechaProximoPedido: null,
   origenAlmacen: { 'AMZ-FBA': 'AMZ-FBA', 'AMZ-MFN': 'AMZ-FBA', LIVERPOOL: 'LIV-FBL', SHOPIFY: 'APLIN' },
+  minimoProduccion: { Sartenes: 600, Cocina: 300, Viaje: 0 },
 };
 
 /** Fecha de hoy en la Ciudad de México (AAAA-MM-DD). */
@@ -201,8 +204,9 @@ export class ReplenishmentService {
     const skus = await this.db.execute<{
       id: string; code: string; name: string; is_kit: boolean; lead: number | null; category: string | null;
       case_units: number | null; cbm_case: string | null; include: boolean | null; manual: string | null;
+      status: string; notes: string | null;
     }>(sql`
-      select s.id, s.sku_code code, s.name, s.is_kit, s.lead_time_days lead, c.name category,
+      select s.id, s.sku_code code, s.name, s.is_kit, s.lead_time_days lead, c.name category, s.status, o.notes,
              pk.units_per_package case_units, (pk.length_mm::numeric * pk.width_mm * pk.height_mm / 1e9) cbm_case,
              o.include_in_orders include, o.manual_daily_demand manual
         from master_skus s
@@ -272,8 +276,12 @@ export class ReplenishmentService {
       caseUnits: s.case_units,
       cbmCase: s.cbm_case === null ? 0 : Number(s.cbm_case),
       leadTimeDays: s.lead,
-      include: s.include ?? true,
+      // Un SKU descontinuado nunca se pide a China; sí se le sugieren envíos a FBA/FBL hasta agotarlo.
+      include: (s.include ?? true) && s.status !== 'DESCONTINUADO',
       manualDailyDemand: s.manual === null ? null : Number(s.manual),
+      moq: s.is_kit ? 0 : (p.minimoProduccion[s.category ?? ''] ?? 0),
+      status: s.status,
+      note: s.notes,
     }));
     skuList.sort((a, b) => (CAT_ORDER[a.category ?? ''] ?? 9) - (CAT_ORDER[b.category ?? ''] ?? 9) || a.code.localeCompare(b.code));
     const leads = skuList.filter((s) => !s.isKit && s.leadTimeDays).map((s) => s.leadTimeDays!);
@@ -295,11 +303,14 @@ export class ReplenishmentService {
       containers,
     });
     const info = new Map(skuList.map((s) => [s.id, s]));
-    const named = <T extends { skuId: string }>(r: T) => ({ ...r, skuCode: info.get(r.skuId)!.code, skuName: info.get(r.skuId)!.name, category: info.get(r.skuId)!.category });
+    const named = <T extends { skuId: string }>(r: T) => {
+      const i = info.get(r.skuId)!;
+      return { ...r, skuCode: i.code, skuName: i.name, category: i.category, skuStatus: i.status, note: i.note };
+    };
     const china = result.china.map(named);
     const channelsOut = result.channels.map(named);
     const urgent = china
-      .filter((r) => r.daysWithout !== null && r.daysWithout > 0 && r.demand >= 0.1)
+      .filter((r) => r.daysWithout !== null && r.daysWithout > 0 && r.demand >= 0.1 && r.skuStatus !== 'DESCONTINUADO')
       .sort((a, b) => (a.stockoutDate ?? '').localeCompare(b.stockoutDate ?? ''));
     const lt = (cat: string) => {
       const xs = skuList.filter((s) => s.category === cat && s.leadTimeDays).map((s) => s.leadTimeDays!);
@@ -334,7 +345,7 @@ export class ReplenishmentService {
         demandTotal: china.reduce((a, r) => a + r.demand, 0),
         urgentCount: urgent.length,
         fbaUrgent: channelsOut.filter((r) => r.coverFba !== null && r.coverFba < p.dhlDias).length,
-        noRecentSales: china.filter((r) => r.alert === 'SIN_VENTA_RECIENTE').length,
+        noRecentSales: china.filter((r) => r.alert === 'SIN_VENTA_RECIENTE' && r.skuStatus !== 'DESCONTINUADO').length,
         newWithoutSales: china.filter((r) => r.alert === 'SIN_VENTA_EN_CAMINO').length,
         suggestFba: channelsOut.reduce((a, r) => a + r.suggestFba, 0),
         sendFba: channelsOut.reduce((a, r) => a + r.sendFba, 0),

@@ -21,6 +21,8 @@ export interface ReplParams {
   capacidadCbm: number;
   fechaProximoPedido: string | null;
   origenAlmacen: Record<string, 'AMZ-FBA' | 'LIV-FBL' | 'APLIN'>;
+  /** Mínimo de producción por SKU según su categoría (piezas). */
+  minimoProduccion: Record<string, number>;
 }
 
 interface Named {
@@ -28,6 +30,10 @@ interface Named {
   skuCode: string;
   skuName: string;
   category: string | null;
+  /** ACTIVO, DESCONTINUADO… */
+  skuStatus: string;
+  /** Nota del ajuste de reabasto (p. ej. "En revisión"). */
+  note: string | null;
 }
 
 export interface ChannelRow extends Named {
@@ -85,6 +91,11 @@ export interface ChinaRow extends Named {
   fullCbm: number;
   daysAtArrival: number | null;
   include: boolean;
+  /** Mínimo de producción en piezas, redondeado a cajas (0 = sin mínimo). */
+  moq: number;
+  /** El mínimo de producción subió el pedido mínimo / el del contenedor lleno. */
+  moqMin: boolean;
+  moqFull: boolean;
   alert: ChinaAlert;
 }
 

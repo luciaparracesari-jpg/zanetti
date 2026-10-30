@@ -169,7 +169,31 @@ test('ventas importadas, contenedores, medidas y cálculo de reabasto', async ()
   assert.equal(p.status, 200);
   assert.equal((await req('PATCH', '/replenishment/params', { mesesHistoria: 40 })).status, 422);
 
+  // Mínimo de producción por categoría: si se pide un SKU, al menos esas piezas (redondeadas a cajas).
+  const cat = `Pruebas ${RUN}`;
+  const base = r2.body.china.find((x) => x.skuCode === A);
+  const saved = (await req('GET', '/replenishment/params')).body;
+  assert.equal((await req('PATCH', '/replenishment/params', { minimoProduccion: { ...saved.minimoProduccion, [cat]: 495 } })).status, 200);
+  const rq = await req('GET', `/replenishment?fecha=${FECHA}`);
+  const a3 = rq.body.china.find((x) => x.skuCode === A);
+  assert.equal(a3.moq, 500, '495 piezas en cajas de 10');
+  assert.equal(a3.minOrder, Math.max(base.minOrder, 500));
+  assert.equal(a3.moqMin, base.minOrder < 500);
+  assert.ok(a3.fullOrder === 0 || a3.fullOrder >= 500, 'el contenedor lleno también respeta el mínimo');
+  await req('PATCH', '/replenishment/params', { minimoProduccion: saved.minimoProduccion });
+
+  // Un SKU descontinuado no se pide a China ni aparece en los que se agotan; sí puede mandarse a FBA/FBL.
+  assert.equal((await req('PATCH', `/skus/${skuA.id}`, { status: 'DESCONTINUADO' })).status, 200);
+  const r4 = await req('GET', `/replenishment?fecha=${FECHA}`);
+  const a4 = r4.body.china.find((x) => x.skuCode === A);
+  assert.equal(a4.include, false);
+  assert.equal(a4.minOrder + a4.fullOrder, 0);
+  assert.ok(!r4.body.urgent.some((u) => u.skuCode === A));
+  assert.equal(r4.body.channels.find((x) => x.skuCode === A).suggestFba, chA.suggestFba);
+  await req('PATCH', `/skus/${skuA.id}`, { status: 'ACTIVO' });
+
   // Llegada a APLIN: ETD + naviera + aduana; con llegada a puerto, puerto + aduana; la fecha capturada manda.
+  await req('PATCH', '/replenishment/params', { navieraDias: 40, aduanaDias: 15 });
   const eta = async () => (await req('GET', `/containers/${c.id}`)).body;
   assert.equal((await req('PATCH', `/containers/${c.id}`, { etd: '2026-10-01' })).status, 200);
   assert.deepEqual(await eta().then((x) => [x.eta, x.etaSource]), ['2026-11-25', 'ETD']);

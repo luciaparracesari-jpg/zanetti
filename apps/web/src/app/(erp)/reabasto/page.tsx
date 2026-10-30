@@ -283,11 +283,12 @@ function China({ data }: { data: ReplResult }) {
     { id: 'cover', header: 'Cobertura', align: 'right', cell: (r) => fmtDays(r.coverTotal), value: (r) => r.coverTotal },
     { id: 'out', header: 'Se agota', group: 'Agotados', cell: (r) => fmtDate(r.stockoutDate), value: (r) => r.stockoutDate },
     { id: 'next', header: 'Siguiente llegada', group: 'Agotados', cell: (r) => fmtDate(r.nextArrival ?? r.newOrderArrival), value: (r) => r.nextArrival ?? r.newOrderArrival },
-    { id: 'without', header: 'Días sin', group: 'Agotados', align: 'right', cell: (r) => (r.daysWithout ? <span className="font-semibold text-bad">{fmtDays(r.daysWithout)}</span> : ''), value: (r) => r.daysWithout },
+    { id: 'without', header: 'Días sin', group: 'Agotados', align: 'right', cell: (r) => (r.daysWithout && r.skuStatus !== 'DESCONTINUADO' ? <span className="font-semibold text-bad">{fmtDays(r.daysWithout)}</span> : ''), value: (r) => (r.skuStatus === 'DESCONTINUADO' ? null : r.daysWithout) },
     { id: 'proj', header: 'Al llegar el pedido', align: 'right', cell: (r) => fmtInt(Math.round(r.projectedAtArrival)), value: (r) => r.projectedAtArrival },
-    { id: 'min', header: 'Piezas', group: 'Pedido mínimo', align: 'right', cell: (r) => qty(r.minOrder), value: (r) => r.minOrder },
+    { id: 'moq', header: 'Mín. producción', align: 'right', cell: (r) => (r.moq ? fmtInt(r.moq) : ''), value: (r) => r.moq },
+    { id: 'min', header: 'Piezas', group: 'Pedido mínimo', align: 'right', cell: (r) => <MoqQty q={r.minOrder} applied={r.moqMin} />, value: (r) => r.minOrder },
     { id: 'minCbm', header: 'CBM', group: 'Pedido mínimo', align: 'right', cell: (r) => (r.minCbm ? fmtDec(r.minCbm, 2) : ''), value: (r) => r.minCbm },
-    { id: 'full', header: 'Piezas', group: 'Contenedor lleno', align: 'right', cell: (r) => <span className={cx(r.fullOrder > 0 && 'font-semibold')}>{qty(r.fullOrder)}</span>, value: (r) => r.fullOrder },
+    { id: 'full', header: 'Piezas', group: 'Contenedor lleno', align: 'right', cell: (r) => <span className={cx(r.fullOrder > 0 && 'font-semibold')}><MoqQty q={r.fullOrder} applied={r.moqFull} /></span>, value: (r) => r.fullOrder },
     { id: 'fullCases', header: 'Cajas', group: 'Contenedor lleno', align: 'right', cell: (r) => (r.fullCases ? fmtInt(r.fullCases) : ''), value: (r) => r.fullCases },
     { id: 'fullCbm', header: 'CBM', group: 'Contenedor lleno', align: 'right', cell: (r) => (r.fullCbm ? fmtDec(r.fullCbm, 2) : ''), value: (r) => r.fullCbm },
     { id: 'dar', header: 'Días al llegar', group: 'Contenedor lleno', align: 'right', cell: (r) => fmtDays(r.daysAtArrival), value: (r) => r.daysAtArrival },
@@ -296,11 +297,11 @@ function China({ data }: { data: ReplResult }) {
       header: 'Aviso',
       cell: (r) => (
         <div className="flex items-center gap-1">
-          {!r.include && <Badge>Excluido</Badge>}
-          {r.alert && <Badge tone={r.alert.startsWith('SE_AGOTA') ? 'bad' : 'warn'}>{ALERT_LABEL[r.alert]}</Badge>}
+          {r.skuStatus === 'DESCONTINUADO' ? <Badge>Descontinuado</Badge> : !r.include && <Badge tone="info">{r.note || 'No se pide'}</Badge>}
+          {r.alert && r.skuStatus !== 'DESCONTINUADO' && <Badge tone={r.alert.startsWith('SE_AGOTA') ? 'bad' : 'warn'}>{ALERT_LABEL[r.alert]}</Badge>}
         </div>
       ),
-      value: (r) => (r.alert ? ALERT_LABEL[r.alert] : r.include ? '' : 'Excluido'),
+      value: (r) => [r.skuStatus === 'DESCONTINUADO' ? 'Descontinuado' : r.include ? '' : r.note || 'No se pide', r.alert && r.skuStatus !== 'DESCONTINUADO' ? ALERT_LABEL[r.alert] : ''].filter(Boolean).join(' · '),
     },
     {
       id: 'adj',
@@ -397,6 +398,7 @@ function AdjustDialog({ row, onClose }: { row: ChinaRow; onClose: () => void }) 
   const qc = useQueryClient();
   const toast = useToast();
   const [include, setInclude] = useState(row.include);
+  const [note, setNote] = useState(row.note ?? '');
   const manual = row.demand !== row.demandCalc;
   const [value, setValue] = useState(manual ? String(row.demand) : '');
   const [busy, setBusy] = useState(false);
@@ -404,7 +406,7 @@ function AdjustDialog({ row, onClose }: { row: ChinaRow; onClose: () => void }) 
   async function save() {
     setBusy(true);
     try {
-      await patch(`/replenishment/skus/${row.skuId}`, { includeInOrders: include, manualDailyDemand: value.trim() === '' ? null : Number(value) });
+      await patch(`/replenishment/skus/${row.skuId}`, { includeInOrders: include, manualDailyDemand: value.trim() === '' ? null : Number(value), notes: note.trim() || null });
       toast.ok(`Reabasto de ${row.skuCode} actualizado.`);
       qc.invalidateQueries({ queryKey: ['replenishment'] });
       onClose();
@@ -436,7 +438,14 @@ function AdjustDialog({ row, onClose }: { row: ChinaRow; onClose: () => void }) 
         <Field label="Venta diaria a usar (piezas)" hint="Vacío = la calculada. Útil para productos nuevos o promociones.">
           <Input inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ''))} placeholder={fmtDec(row.demandCalc, 2)} />
         </Field>
-        <Checkbox label="Incluir en el pedido a China" checked={include} onChange={(e) => setInclude(e.target.checked)} />
+        {row.skuStatus === 'DESCONTINUADO' ? (
+          <p className="text-sm text-ink-soft">Está descontinuado: no se pide a China (se cambia en la ficha del SKU).</p>
+        ) : (
+          <Checkbox label="Incluir en el pedido a China" checked={include} onChange={(e) => setInclude(e.target.checked)} />
+        )}
+        <Field label="Nota" hint="Por qué no se pide o qué se está revisando (p. ej. En revisión).">
+          <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} />
+        </Field>
       </div>
     </Dialog>
   );
@@ -540,6 +549,20 @@ const PARAM_FIELDS: { key: keyof ReplParams; label: string; hint?: string; step?
   { group: 'China', key: 'capacidadCbm', label: 'Capacidad del contenedor (CBM)', step: '0.5' },
 ];
 
+const MOQ_CATEGORIES = ['Sartenes', 'Cocina', 'Viaje'];
+
+/** Cantidad del pedido; marcada si la subió el mínimo de producción. */
+function MoqQty({ q, applied }: { q: number; applied: boolean }) {
+  if (!q) return <span className="text-ink-faint">—</span>;
+  return applied ? (
+    <span className="text-warn" title="Subió al mínimo de producción">
+      {fmtInt(q)}*
+    </span>
+  ) : (
+    <>{fmtInt(q)}</>
+  );
+}
+
 function ParamsForm({ data }: { data: ReplResult }) {
   const { can } = useSession();
   const qc = useQueryClient();
@@ -548,10 +571,12 @@ function ParamsForm({ data }: { data: ReplResult }) {
   const [v, setV] = useState<Record<string, string>>({});
   const [round, setRound] = useState(saved.redondearCajas);
   const [fechaPedido, setFechaPedido] = useState(saved.fechaProximoPedido ?? '');
+  const [moq, setMoq] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   useEffect(() => {
     setV(Object.fromEntries(PARAM_FIELDS.map((f) => [f.key, String(saved[f.key])])));
+    setMoq(Object.fromEntries(MOQ_CATEGORIES.map((c) => [c, String(saved.minimoProduccion?.[c] ?? 0)])));
   }, [saved]);
   const editable = can('reabasto.editar');
   async function save() {
@@ -561,6 +586,7 @@ function ParamsForm({ data }: { data: ReplResult }) {
       const body: Record<string, unknown> = Object.fromEntries(PARAM_FIELDS.map((f) => [f.key, Number(v[f.key])]));
       body.redondearCajas = round;
       body.fechaProximoPedido = fechaPedido || null;
+      body.minimoProduccion = { ...saved.minimoProduccion, ...Object.fromEntries(MOQ_CATEGORIES.map((c) => [c, Math.max(0, Math.round(Number(moq[c] || 0)))])) };
       await patch('/replenishment/params', body);
       toast.ok('Parámetros guardados.');
       qc.invalidateQueries({ queryKey: ['replenishment'] });
@@ -589,6 +615,15 @@ function ParamsForm({ data }: { data: ReplResult }) {
                     <Input type="date" value={fechaPedido} disabled={!editable} onChange={(e) => setFechaPedido(e.target.value)} />
                   </Field>
                   <Checkbox label="Redondear a cajas master" checked={round} disabled={!editable} onChange={(e) => setRound(e.target.checked)} />
+                  <p className="mt-1 text-xs font-semibold text-ink">Mínimo de producción por SKU (piezas)</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {MOQ_CATEGORIES.map((c) => (
+                      <Field key={c} label={c}>
+                        <Input type="number" min={0} step="1" value={moq[c] ?? ''} disabled={!editable} onChange={(e) => setMoq((x) => ({ ...x, [c]: e.target.value }))} />
+                      </Field>
+                    ))}
+                  </div>
+                  <p className="text-xs text-ink-faint">Si se pide un SKU, se piden al menos estas piezas (redondeadas a cajas). 0 = sin mínimo.</p>
                 </>
               )}
             </div>

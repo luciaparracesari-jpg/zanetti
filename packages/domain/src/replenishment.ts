@@ -8,6 +8,7 @@
  * - APLIN sólo surte a FBA y FBL (y Shopify); los bundles se arman en APLIN con lo que sobra de sus componentes.
  * - China: proyección día a día con los contenedores en camino (sin quedar en negativo); pedido mínimo = un ciclo + seguridad;
  *   contenedor lleno = mayor número de días de venta iguales para todos que cabe en la capacidad.
+ * - Mínimo de producción por SKU: si se pide un SKU, se piden al menos esas piezas (redondeadas a cajas).
  */
 
 export type PlanWarehouse = 'AMZ-FBA' | 'LIV-FBL' | 'APLIN';
@@ -51,6 +52,8 @@ export interface ReplSku {
   include: boolean;
   /** Venta diaria capturada a mano (sustituye a la calculada en el pedido a China). */
   manualDailyDemand: number | null;
+  /** Mínimo de producción en piezas (0 = sin mínimo): si se pide, se piden al menos estas. */
+  moq: number;
 }
 
 export interface ReplKitComponent {
@@ -149,6 +152,12 @@ export interface ChinaRow {
   fullCbm: number;
   daysAtArrival: number | null;
   include: boolean;
+  /** Mínimo de producción en piezas, redondeado a cajas (0 = sin mínimo). */
+  moq: number;
+  /** true si el mínimo de producción subió el pedido mínimo. */
+  moqMin: boolean;
+  /** true si el mínimo de producción subió el pedido con el contenedor lleno. */
+  moqFull: boolean;
   alert: 'SIN_VENTA_EN_CAMINO' | 'SIN_VENTA_RECIENTE' | 'SE_AGOTA_ANTES_DE_LLEGADA' | 'SE_AGOTA_SIN_PEDIDO' | null;
 }
 
@@ -329,8 +338,11 @@ export function computeReplenishment(input: ReplInput): ReplResult {
     const stockoutDate = H > 0 ? addDaysFrac(today, physical / H) : null;
     const daysWithout = H > 0 ? Math.max(0, daysBetween(today, nextArrival ?? newArrival) - physical / H) : null;
     const need = H * (P.cicloDias + P.seguridadDias);
-    const minOrder = s.include ? roundUp(need - projectedAtArrival, s.caseUnits, P.redondearCajas) : 0;
     const unit = P.redondearCajas && s.caseUnits && s.caseUnits > 0 ? s.caseUnits : 1;
+    // Mínimo de producción en unidades de cálculo (cajas o piezas).
+    const moqUnits = s.moq > 0 ? Math.ceil(s.moq / unit) : 0;
+    const rawMin = s.include ? roundUp(need - projectedAtArrival, s.caseUnits, P.redondearCajas) : 0;
+    const minOrder = rawMin > 0 ? Math.max(rawMin, moqUnits * unit) : 0;
     const cbmUnit = P.redondearCajas && s.caseUnits && s.caseUnits > 0 ? s.cbmCase : s.caseUnits && s.caseUnits > 0 ? s.cbmCase / s.caseUnits : 0;
     let alert: ChinaRow['alert'] = null;
     if (H === 0 && onTheWay > 0) alert = 'SIN_VENTA_EN_CAMINO';
@@ -363,30 +375,36 @@ export function computeReplenishment(input: ReplInput): ReplResult {
       fullCbm: 0,
       daysAtArrival: null,
       include: s.include,
+      moq: moqUnits * unit,
+      moqMin: minOrder > rawMin,
+      moqFull: false,
       alert,
       // auxiliares para el llenado
       _unit: unit,
       _cbmUnit: cbmUnit,
-    } as ChinaRow & { _unit: number; _cbmUnit: number };
+      _moqUnits: moqUnits,
+    } as ChinaRow & { _unit: number; _cbmUnit: number; _moqUnits: number };
   });
 
   // ── Llenado del contenedor: mayor número de días (0…400) que cabe en la capacidad ──
-  const units = (r: ChinaRow & { _unit: number }, t: number) => {
+  const units = (r: ChinaRow & { _unit: number; _moqUnits: number }, t: number) => {
     if (!r.include) return 0;
     const x = r.demand * t - r.projectedAtArrival;
-    return x > 0 ? Math.ceil(x / r._unit) : 0;
+    return x > 0 ? Math.max(Math.ceil(x / r._unit), r._moqUnits) : 0;
   };
   const cbmAt = (t: number) => china.reduce((a, r) => a + units(r as never, t) * (r as unknown as { _cbmUnit: number })._cbmUnit, 0);
   let days = 0;
   for (let t = 0; t <= 400; t++) if (cbmAt(t) <= P.capacidadCbm + 1e-9) days = t;
-  for (const r of china as (ChinaRow & { _unit: number; _cbmUnit: number })[]) {
+  for (const r of china as (ChinaRow & { _unit: number; _cbmUnit: number; _moqUnits: number })[]) {
     const n = units(r, days);
+    r.moqFull = n > 0 && Math.ceil((r.demand * days - r.projectedAtArrival) / r._unit) < r._moqUnits;
     r.fullOrder = n * r._unit;
     r.fullCases = r.caseUnits ? r.fullOrder / r.caseUnits : null;
     r.fullCbm = n * r._cbmUnit;
     r.daysAtArrival = r.demand > 0 ? (r.projectedAtArrival + r.fullOrder) / r.demand : null;
     delete (r as Partial<typeof r>)._unit;
     delete (r as Partial<typeof r>)._cbmUnit;
+    delete (r as Partial<typeof r>)._moqUnits;
   }
 
   // Cuánto tener en APLIN (componentes)
