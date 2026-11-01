@@ -36,6 +36,8 @@ import { ContainersController } from './replenishment/containers.controller';
 import { ReplenishmentController } from './replenishment/replenishment.controller';
 import { ReplenishmentService } from './replenishment/replenishment.service';
 import { SalesController } from './replenishment/sales.controller';
+import { IntegrationsController } from './integrations/integrations.controller';
+import { IntegrationsService } from './integrations/integrations.service';
 
 @Module({
   imports: [
@@ -67,6 +69,7 @@ import { SalesController } from './replenishment/sales.controller';
     SalesController,
     ContainersController,
     AliasesController,
+    IntegrationsController,
     AdjustmentsController,
     TransfersController,
     CountsController,
@@ -81,6 +84,7 @@ import { SalesController } from './replenishment/sales.controller';
     TransfersService,
     CountsService,
     ReplenishmentService,
+    IntegrationsService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

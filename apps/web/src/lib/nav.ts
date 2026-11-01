@@ -126,7 +126,7 @@ export const NAV: NavSection[] = [
       { label: 'Roles y permisos', href: '/configuracion/roles', perm: 'configuracion.ver' },
       { label: 'Canales y comisiones', href: '/configuracion/canales', perm: 'canales.ver' },
       { label: 'Auditoría', href: '/configuracion/auditoria', perm: 'auditoria.ver' },
-      soon('Integraciones', 7, 'Integraciones (fase 2)', 'integraciones.ver'),
+      { label: 'Integraciones', href: '/configuracion/integraciones', perm: 'integraciones.ver' },
     ],
   },
 ];

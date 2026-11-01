@@ -71,6 +71,13 @@
       "when": 1793311669934,
       "tag": "0009_llegada_a_puerto",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793389832668,
+      "tag": "0010_integraciones",
+      "breakpoints": true
     }
   ]
 }

@@ -43,7 +43,8 @@ jobs:
           pnpm db:seed
       - name: Pruebas de punta a punta de la API
         run: |
-          LOGIN_THROTTLE_LIMIT=200 node apps/api/dist/main.js &
+          # APLIN simulado (lo levanta test/integrations.test.mjs en el puerto 4900); credenciales sólo de prueba.
+          APLINTEST_BASE_URL=http://localhost:4900 APLINTEST_ORG_CODE=prueba-aplin LOGIN_THROTTLE_LIMIT=200 node apps/api/dist/main.js &
           for i in $(seq 1 30); do curl -sf localhost:4000/api/v1/health && break; sleep 1; done
           cd apps/api
           ADMIN_EMAIL=admin@ci.local ADMIN_PASSWORD=CiAdmin2026a ADMIN_NEW_PASSWORD=CiAdmin2026b pnpm test

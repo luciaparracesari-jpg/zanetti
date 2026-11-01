@@ -85,3 +85,17 @@ export const containerStatus = pgEnum('container_status', [
   'PERDIDO',
   'CANCELADO',
 ]);
+
+// ── Integraciones (APLIN, Shopify, Amazon…) ──
+export const integrationProvider = pgEnum('integration_provider', ['APLIN', 'SHOPIFY', 'AMAZON_SP_API', 'MERCADO_LIBRE', 'LIVERPOOL']);
+export const integrationStatus = pgEnum('integration_status', ['ACTIVA', 'PAUSADA']);
+export const syncRunStatus = pgEnum('sync_run_status', ['EN_CURSO', 'OK', 'ERROR']);
+/** Qué representa una orden del operador logístico para el ERP. */
+export const channelOrderKind = pgEnum('channel_order_kind', [
+  'ENVIO_FBA',
+  'ENVIO_FBL',
+  'LIVERPOOL_VENDOR',
+  'SHOPIFY_ZANETTI',
+  'SHOPIFY_LEANTRAVEL',
+  'OTRO',
+]);

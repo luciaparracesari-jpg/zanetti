@@ -67,6 +67,17 @@ Lo que ya va en camino a FBA se carga en APLIN y se manda con una transferencia 
 - **Compras → Contenedores**: se cargan desde Excel (CONTENEDOR, SKU, PIEZAS, FECHA DEL PEDIDO, ESTADO, ETD, LLEGADA A PUERTO, FECHA ESTIMADA EN APLIN, PROVEEDOR, COSTO UNITARIO). Llegada a APLIN = la fecha capturada; si no hay, llegada a puerto + días de puerto, aduana y traslado; si no, ETD + naviera + aduana; si no hay ETD, fecha del pedido + lead time del SKU más lento. Cuentan como “en camino” los que están en producción, naviera o aduana. **Recibir en APLIN** crea los lotes (código = contenedor) con su costo o, sin costo, como provisional.
 - **Compras → Reabasto**: venta diaria por SKU y canal (promedio de los últimos meses completos sin los meses de quiebre), envíos sugeridos de APLIN a FBA (Almex o DHL según la cobertura) y a Liverpool FBL con lo que alcanza en APLIN (crea la transferencia), SKU que se agotan antes del siguiente contenedor y pedido a China: mínimo por SKU y contenedor lleno (mismos días de venta para todos hasta llenar la capacidad en CBM, en cajas master). Los parámetros se editan en la pestaña Parámetros, incluido el **mínimo de producción por SKU** según su categoría (si un SKU se pide, se piden al menos esas piezas, en cajas; el pedido marcado con * subió por el mínimo). Por SKU se puede excluir de pedidos con una nota (p. ej. «En revisión») o fijar una venta diaria manual. Un SKU **DESCONTINUADO** (ficha del SKU) nunca se pide a China ni aparece en los que se agotan, pero sigue en los envíos a FBA/FBL hasta agotarlo.
 
+## Integraciones
+
+**Configuración → Integraciones.** Por ahora, APLIN en modo de **sólo consulta** (API de APLIN OS):
+
+- Las credenciales van en el `.env` del servidor (`APLIN_BASE_URL`, `APLIN_ORG_CODE`); la conexión sólo guarda el prefijo y ninguna pantalla ni respuesta de la API las muestra. El cliente sólo pide el token y hace GET: no puede crear ni cancelar órdenes en APLIN.
+- **Sincronizar** trae el catálogo de APLIN con sus existencias y las órdenes (sin comprador ni dirección). No mueve el inventario del ERP.
+- **Existencias APLIN vs ERP**: diferencia por SKU (APLIN es la fuente de verdad del inventario físico).
+- **Órdenes** clasificadas por su número: `FBA…` envío a Amazon FBA, `LIV_NN` envío a Liverpool FBL, 10 dígitos pedido Liverpool Vendor, `#NNNN-ZT` Shopify Zanetti, `#NNNN` Shopify LeanTravel. Alerta de órdenes abiertas sin existencia para surtir y de pedidos Vendor (faltante en FBL).
+- `INTEGRATIONS_SYNC_MINUTES` activa la sincronización automática.
+- Pruebas: `test/integrations.test.mjs` usa un APLIN simulado (`test/mock-aplin.mjs`); la API de pruebas arranca con `APLINTEST_BASE_URL=http://localhost:4900 APLINTEST_ORG_CODE=prueba-aplin`.
+
 ## Stack
 
 - **Monorepo** pnpm + Turborepo, TypeScript estricto.
