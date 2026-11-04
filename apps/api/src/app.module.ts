@@ -38,6 +38,16 @@ import { ReplenishmentService } from './replenishment/replenishment.service';
 import { SalesController } from './replenishment/sales.controller';
 import { IntegrationsController } from './integrations/integrations.controller';
 import { IntegrationsService } from './integrations/integrations.service';
+import { AttachmentsController } from './purchasing/attachments.controller';
+import { AttachmentsService } from './purchasing/attachments.service';
+import { ContainerCostingController } from './purchasing/container-costing.controller';
+import { ContainerCostingService } from './purchasing/costing.service';
+import { PurchaseOrdersController } from './purchasing/purchase-orders.controller';
+import { PurchasingService } from './purchasing/purchasing.service';
+import { ValuationController } from './purchasing/valuation.controller';
+import { ValuationService } from './purchasing/valuation.service';
+import { ProfitabilityController } from './purchasing/profitability.controller';
+import { ProfitabilityService } from './purchasing/profitability.service';
 
 @Module({
   imports: [
@@ -70,6 +80,11 @@ import { IntegrationsService } from './integrations/integrations.service';
     ContainersController,
     AliasesController,
     IntegrationsController,
+    PurchaseOrdersController,
+    ContainerCostingController,
+    AttachmentsController,
+    ValuationController,
+    ProfitabilityController,
     AdjustmentsController,
     TransfersController,
     CountsController,
@@ -85,6 +100,11 @@ import { IntegrationsService } from './integrations/integrations.service';
     CountsService,
     ReplenishmentService,
     IntegrationsService,
+    AttachmentsService,
+    PurchasingService,
+    ContainerCostingService,
+    ValuationService,
+    ProfitabilityService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

@@ -46,6 +46,13 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   stock_transfer_items_sku_uq: 'El SKU ya está en la transferencia.',
   stock_transfer_items_recv_ck: 'No se puede recibir más de lo enviado.',
   inventory_count_lines_uq: 'El SKU ya está en el conteo para esa ubicación.',
+  purchase_order_items_sku_uq: 'El SKU ya está en la orden de compra.',
+  purchase_order_items_qty_ck: 'Las piezas deben ser mayores que 0.',
+  purchase_order_items_price_ck: 'El precio no puede ser negativo.',
+  purchase_orders_currency_ck: 'Moneda inválida (MXN, USD o CNY).',
+  purchase_order_payments_amount_ck: 'El pago debe ser mayor que 0.',
+  container_costs_amount_ck: 'El gasto no puede ser negativo.',
+  purchase_order_items_master_sku_id_master_skus_id_fk: 'El SKU está en una orden de compra.',
 };
 
 function findPgError(err: unknown): PgLikeError | undefined {

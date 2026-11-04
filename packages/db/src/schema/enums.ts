@@ -99,3 +99,20 @@ export const channelOrderKind = pgEnum('channel_order_kind', [
   'SHOPIFY_LEANTRAVEL',
   'OTRO',
 ]);
+
+// ── Compras e importación (entrega 3) ──
+export const purchaseOrderStatus = pgEnum('purchase_order_status', ['BORRADOR', 'ENVIADA', 'CONFIRMADA', 'RECIBIDA', 'CANCELADA']);
+/** Cómo se reparte un gasto del contenedor entre sus renglones. */
+export const costAllocationBasis = pgEnum('cost_allocation_basis', ['PIEZAS', 'CBM', 'VALOR']);
+export const containerCostStatus = pgEnum('container_cost_status', ['ABIERTO', 'CERRADO']);
+export const attachmentKind = pgEnum('attachment_kind', [
+  'ORDEN',
+  'PROFORMA',
+  'FACTURA',
+  'PACKING_LIST',
+  'BL',
+  'PEDIMENTO',
+  'COMPROBANTE_PAGO',
+  'FACTURA_GASTO',
+  'OTRO',
+]);

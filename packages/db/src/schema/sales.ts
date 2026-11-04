@@ -1,10 +1,11 @@
 import { sql } from 'drizzle-orm';
 import { boolean, check, date, index, integer, numeric, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { createdAt, pk, tsz, updatedAt } from './_columns';
-import { containerStatus, saleLineKind, saleSource } from './enums';
+import { containerCostStatus, containerStatus, costAllocationBasis, saleLineKind, saleSource } from './enums';
 import { masterSkus, suppliers } from './catalog';
 import { channelListings, channels } from './channels';
 import { dataImportBatches } from './imports';
+import { purchaseOrderItems } from './purchasing';
 
 /**
  * Renglón de venta o devolución tal como lo reporta el canal (una pieza o varias del mismo SKU).
@@ -84,6 +85,17 @@ export const importContainers = pgTable(
     capacityCbm: numeric({ precision: 8, scale: 2 }),
     receivedAt: tsz(),
     notes: text(),
+    // ── Costeo (entrega 3) ──
+    /** Número de pedimento y factura comercial del embarque. */
+    pedimento: text(),
+    invoiceRef: text(),
+    /** Tipo de cambio que el usuario captura para costear lo que no trae el suyo (órdenes y gastos en USD). */
+    fxRate: numeric({ precision: 12, scale: 4 }),
+    /** Tipo de cambio del pedimento, para calcular el arancel (IGI) de cada SKU; si falta se usa el anterior. */
+    dutyFxRate: numeric({ precision: 12, scale: 4 }),
+    costStatus: containerCostStatus().notNull().default('ABIERTO'),
+    costClosedAt: tsz(),
+    costClosedById: uuid(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     createdById: uuid(),
@@ -105,15 +117,54 @@ export const importContainerLines = pgTable(
     supplierId: uuid().references(() => suppliers.id, { onDelete: 'set null' }),
     qty: integer().notNull(),
     orderDate: date({ mode: 'string' }).notNull(),
-    /** Costo unitario puesto en almacén (MXN sin IVA), si ya se conoce. */
+    /** Costo unitario puesto en almacén (MXN sin IVA), si ya se conoce. Al cerrar el costeo = mercancía + gastos. */
     unitCost: numeric({ precision: 14, scale: 4 }),
+    /** Desglose del costo al cerrar el costeo: precio del proveedor en MXN, gastos del contenedor y arancel por pieza. */
+    merchUnitCost: numeric({ precision: 14, scale: 4 }),
+    expenseUnitCost: numeric({ precision: 14, scale: 4 }),
+    dutyUnitCost: numeric({ precision: 14, scale: 4 }),
+    /** Renglón de la orden de compra de donde viene (precio y proveedor). */
+    poItemId: uuid().references(() => purchaseOrderItems.id, { onDelete: 'set null' }),
+    /** Piezas que entraron a APLIN al recibir el contenedor. */
+    qtyReceived: integer(),
     notes: text(),
     createdAt: createdAt(),
   },
   (t) => [
     index('import_container_lines_container_idx').on(t.containerId),
+    index('import_container_lines_po_item_idx').on(t.poItemId),
     index('import_container_lines_sku_idx').on(t.masterSkuId),
     check('import_container_lines_qty_ck', sql`qty > 0`),
+  ],
+);
+
+/** Gastos del contenedor (flete, maniobras, agente aduanal, DTA, IGI…). Se reparten entre sus renglones al costear. */
+export const containerCosts = pgTable(
+  'container_costs',
+  {
+    id: pk(),
+    containerId: uuid()
+      .notNull()
+      .references(() => importContainers.id, { onDelete: 'cascade' }),
+    lineNo: integer().notNull(),
+    concept: text().notNull(),
+    /** Sin IVA (el IVA de importación es acreditable, no es costo). */
+    amount: numeric({ precision: 14, scale: 2 }).notNull(),
+    currency: text().notNull().default('MXN'),
+    /** Si falta en un gasto en USD se usa el tipo de cambio del contenedor. */
+    fxRate: numeric({ precision: 12, scale: 4 }),
+    basis: costAllocationBasis().notNull().default('PIEZAS'),
+    invoiceRef: text(),
+    notes: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    createdById: uuid(),
+  },
+  (t) => [
+    index('container_costs_container_idx').on(t.containerId),
+    check('container_costs_amount_ck', sql`amount >= 0`),
+    check('container_costs_currency_ck', sql`currency IN ('MXN', 'USD', 'CNY')`),
+    check('container_costs_fx_ck', sql`fx_rate IS NULL OR fx_rate > 0`),
   ],
 );
 

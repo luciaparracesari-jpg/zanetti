@@ -4,18 +4,18 @@ Plataforma ERP web para administrar un negocio de ecommerce multicanal en Méxic
 
 Diseño completo (arquitectura, modelo de datos, APIs, roles, flujos, wireframes y roadmap): documento **“ERP Ecommerce — Diseño del sistema”** en el proyecto Zanetti de Claude. Las decisiones técnicas que cambiaron respecto al diseño están en [`docs/decisiones.md`](docs/decisiones.md).
 
-## Estado: entregas 1 y 2 de 6 del MVP, más ventas y reabasto
+## Estado: entregas 1 y 2 de 6 del MVP, más ventas, reabasto, compras con costeo de contenedores y P&L por SKU
 
 | Incluido en las entregas 1 y 2 | Llega después |
 | --- | --- |
 | **Inventario (entrega 2):** existencias por almacén y ubicación, lotes FIFO, kardex con saldo, ajustes con autorización, transferencias APLIN ⇄ FBA/FBL por pieza o caja master, conteos físicos ciegos, inventario inicial desde Excel | |
 | Login con sesiones, bloqueo por intentos, cambio obligatorio de contraseña | |
-| Roles y permisos (8 roles iniciales, matriz editable, permiso de campo para costos) | Entrega 3: compras, órdenes de compra, recepciones |
+| Roles y permisos (8 roles iniciales, matriz editable, permiso de campo para costos) | Entrega 3: solicitudes y cotizaciones de compra, recepciones nacionales |
 | Auditoría inmutable (la base de datos rechaza UPDATE/DELETE) | Entrega 4: pedidos, devoluciones, importación de reportes Amazon/Liverpool |
 | Catálogo: productos, SKU maestros, kits (bundles), códigos de barras con validación EAN/UPC, marcas, categorías | Entrega 5: reabasto, alertas, dashboard de ventas, reportes |
 | Canales con cobertura objetivo y comisiones con vigencia (Liverpool 16.43 % → 19.00 % el 8-abr-2026) | Entrega 6: carga inicial y pruebas con datos reales |
 | Publicaciones (ASIN, artículo Liverpool, variante Shopify) ligadas al SKU, con modelo de surtido | Fase 2: conectores Amazon SP-API, Liverpool, Shopify, Mercado Libre |
-| Cola de códigos sin mapear | Fase 3: importaciones, costo puesto en almacén, rentabilidad |
+| Cola de códigos sin mapear | Fase 3: rentabilidad con ventas reales y costo de venta |
 | Almacenes y ubicaciones: APLIN (propio), Amazon FBA, Liverpool FBL, Liverpool 99 Minutos | Fase 4: finanzas y CFDI |
 | Proveedores (ficha básica), búsqueda global (Ctrl K), tablas con filtros guardados, columnas configurables, exportación CSV | |
 | Importación desde Excel/CSV con vista previa, corrección y confirmación; cajas master por SKU | |
@@ -66,6 +66,13 @@ Lo que ya va en camino a FBA se carga en APLIN y se manda con una transferencia 
 - **Productos → Medidas de caja (CBM)**: largo, ancho, alto y peso de la caja master; avisa si el CBM del archivo no cuadra con las medidas.
 - **Compras → Contenedores**: se cargan desde Excel (CONTENEDOR, SKU, PIEZAS, FECHA DEL PEDIDO, ESTADO, ETD, LLEGADA A PUERTO, FECHA ESTIMADA EN APLIN, PROVEEDOR, COSTO UNITARIO). Llegada a APLIN = la fecha capturada; si no hay, llegada a puerto + días de puerto, aduana y traslado; si no, ETD + naviera + aduana; si no hay ETD, fecha del pedido + lead time del SKU más lento. Cuentan como “en camino” los que están en producción, naviera o aduana. **Recibir en APLIN** crea los lotes (código = contenedor) con su costo o, sin costo, como provisional.
 - **Compras → Reabasto**: venta diaria por SKU y canal (promedio de los últimos meses completos sin los meses de quiebre), envíos sugeridos de APLIN a FBA (Almex o DHL según la cobertura) y a Liverpool FBL con lo que alcanza en APLIN (crea la transferencia), SKU que se agotan antes del siguiente contenedor y pedido a China: mínimo por SKU y contenedor lleno (mismos días de venta para todos hasta llenar la capacidad en CBM, en cajas master). Los parámetros se editan en la pestaña Parámetros, incluido el **mínimo de producción por SKU** según su categoría (si un SKU se pide, se piden al menos esas piezas, en cajas; el pedido marcado con * subió por el mínimo). Por SKU se puede excluir de pedidos con una nota (p. ej. «En revisión») o fijar una venta diaria manual. Un SKU **DESCONTINUADO** (ficha del SKU) nunca se pide a China ni aparece en los que se agotan, pero sigue en los envíos a FBA/FBL hasta agotarlo.
+
+## Compras, costeo de contenedores y P&L por SKU
+
+- **Compras → Órdenes de compra**: una orden por proveedor (folio OC-000001) en su moneda, con tipo de cambio para costear (opcional), incoterm y condiciones. Los renglones se capturan o se **cargan desde Excel/CSV** (SKU y piezas; precio y código del proveedor si vienen; reconoce la hoja del proveedor en un libro con varias): primero muestra qué haría y sólo aplica si no hay errores; el archivo queda guardado en la orden. **Orden en Excel** genera la hoja para mandar al proveedor. Pagos (anticipo, saldo) con su tipo de cambio, archivos (orden, proforma, factura, packing list, comprobantes; hasta 15 MB, guardados en la base) y **Pasar a contenedor**: lo pendiente de la orden entra al contenedor; si el contenedor ya trae el SKU sin orden (el pedido sugerido del reabasto), se liga ese renglón.
+- **Contenedor → Costeo** (requiere ver costos): número de pedimento y factura, **tipo de cambio de la mercancía** y **del pedimento**, gastos en su moneda (flete marítimo en USD, flete nacional, maniobras, honorarios, DTA, prevalidación, PRV, IGI de incrementables…; «Conceptos habituales» los carga en 0) y su reparto (por piezas, como el negocio; también por CBM o por valor). Costo puesto en bodega por pieza = precio del proveedor × tipo de cambio + **arancel** (precio × tipo de cambio del pedimento × tasa IGI del SKU, que se captura por SKU) + gastos ÷ piezas. Al **recibir** sin costeo cerrado, los lotes entran con el costo estimado como provisional. **Cerrar costeo** fija el costo de cada renglón y, si ya llegó, revalúa sus lotes: lo que queda en almacenes con un movimiento REVALUACION_COSTO (el kardex cuadra), lo que va en camino entre almacenes con el costo nuevo; la diferencia de lo que ya salió se informa. Se puede reabrir y volver a cerrar.
+- **Inventario → Valor por contenedor**: piezas y valor de cada contenedor (lote) por almacén y en camino, aviso de costos provisionales o en cero, contenedores en camino al costo estimado y órdenes aún sin contenedor (con lo pagado).
+- **Reportes → P&L por SKU** (Amazon, Liverpool, Shopify): por pieza, con el **último precio de venta del canal** (ventas importadas; el capturado sólo si el SKU aún no se vende ahí): venta neta (÷ 1.16), COGS = producto + arancel + gastos de importación + envío a la bodega del canal (por caja ÷ piezas), comisión (regla vigente del canal o supuesto), fulfillment FBA/FBL, publicidad, margen operativo, almacenaje, EBITDA y %. El costo es el del contenedor elegido (o el último costeo cerrado de cada SKU; si no hay, el promedio del inventario). Los supuestos se editan por canal y por SKU. El costo del producto no se divide entre 1.16: no trae IVA.
 
 ## Integraciones
 
@@ -135,6 +142,8 @@ DATABASE_URL=postgresql://erp:erp@localhost:5432/erp pnpm test
 `test/inventory.test.mjs` cubre el inventario: FIFO con costos, rechazo y autorización de negativos, dos salidas simultáneas sobre la misma existencia (sólo una pasa), kits, cuarentena, transferencias por caja master (apartar, cancelar, enviar, recepción parcial y cierre con diferencias), conteo con movimientos posteriores a la foto, umbral de autorización, costos ocultos sin permiso, inventario inicial desde CSV y que el kardex sea de sólo inserción.
 
 Los archivos de prueba corren uno tras otro (`--test-concurrency=1`): el primero cambia la contraseña inicial del Administrador y en paralelo se pisarían. El login admite 10 intentos por minuto por IP y las pruebas abren varias sesiones: arranca la API de pruebas con `LOGIN_THROTTLE_LIMIT=200` (como en CI); nunca lo subas en producción.
+
+`test/purchasing.test.mjs` cubre compras y costeo: orden con carga desde CSV (vista previa, bloqueo con errores), archivos (descarga, tipo no permitido), Excel para el proveedor, pagos, paso a contenedor ligando el pedido sugerido, costeo con gastos en USD y MXN y arancel por SKU, recepción con costo estimado, merma, cierre con revaluación (existencia, consumido y kardex), valor por contenedor y P&L por SKU con el último precio de venta.
 
 `test/imports.test.mjs` cubre la importación: encabezado en el segundo renglón, espacios invisibles, duplicados, dígito verificador, corrección y omisión de renglones, bloqueo con errores, aplicación, reimportación sin duplicar y conflictos con datos existentes.
 

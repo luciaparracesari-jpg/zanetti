@@ -1,7 +1,7 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
-import { importContainerLines, importContainers, masterSkus, suppliers, type Db } from '@erp/db';
-import { postMovement, refreshAvgCost, defaultLocationId } from '@erp/domain';
+import { importContainerLines, importContainers, type Db } from '@erp/db';
+import { fix4, postMovement, refreshAvgCost, defaultLocationId } from '@erp/domain';
 import { z } from 'zod';
 import { Perm } from '../auth/decorators';
 import { CurrentActor, type Actor } from '../common/actor';
@@ -10,6 +10,7 @@ import { diff } from '../common/diff';
 import { parse } from '../common/zod';
 import { AuditService } from '../audit/audit.service';
 import { ReplenishmentService } from './replenishment.service';
+import { ContainerCostingService } from '../purchasing/costing.service';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha AAAA-MM-DD');
 const STATUS = ['PLANEADO', 'EN_PRODUCCION', 'EN_NAVIERA', 'EN_ADUANA', 'PERDIDO', 'CANCELADO'] as const;
@@ -21,6 +22,7 @@ export class ContainersController {
     @InjectDb() private readonly db: Db,
     private readonly svc: ReplenishmentService,
     private readonly audit: AuditService,
+    private readonly costing: ContainerCostingService,
   ) {}
 
   @Get()
@@ -39,19 +41,28 @@ export class ContainersController {
     const p = await this.svc.storedParams();
     const [c] = (await this.svc.containers(p, null)).filter((x) => x.id === id);
     if (!c) throw new NotFoundException('Contenedor no encontrado.');
-    const extra = await this.db
-      .select({ id: importContainerLines.id, skuId: importContainerLines.masterSkuId, name: masterSkus.name, supplier: suppliers.name, unitCost: importContainerLines.unitCost, notes: importContainerLines.notes })
-      .from(importContainerLines)
-      .innerJoin(masterSkus, eq(masterSkus.id, importContainerLines.masterSkuId))
-      .leftJoin(suppliers, eq(suppliers.id, importContainerLines.supplierId))
-      .where(eq(importContainerLines.containerId, id));
-    const byLine = new Map(extra.map((e) => [e.skuId + e.id, e]));
+    const lines = await this.costing.lines(this.db, id, c.status === 'RECIBIDO');
+    const lead = new Map(c.lines.map((l) => [l.skuId, l.lead]));
+    const orderDate = new Map(c.lines.map((l) => [l.skuId, l.orderDate]));
+    const { lines: _ignored, ...rest } = c;
     return {
-      ...c,
-      lines: c.lines.map((l, i) => {
-        const e = extra.filter((x) => x.skuId === l.skuId)[0] ?? byLine.get(l.skuId);
-        return { ...l, n: i + 1, name: e?.name ?? null, supplier: e?.supplier ?? null, cbm: l.caseUnits && l.cbmCase ? (l.qty / l.caseUnits) * Number(l.cbmCase) : 0 };
-      }),
+      ...rest,
+      lines: lines.map((l, i) => ({
+        n: i + 1,
+        id: l.id,
+        skuId: l.skuId,
+        skuCode: l.skuCode,
+        name: l.name,
+        supplier: l.supplier,
+        qty: l.qty,
+        qtyReceived: l.qtyReceived,
+        orderDate: orderDate.get(l.skuId) ?? null,
+        lead: lead.get(l.skuId) ?? null,
+        caseUnits: l.caseUnits,
+        cbm: l.caseUnits && l.cbm !== null && l.qtyCosted ? (l.cbm / l.qtyCosted) * l.qty : 0,
+        poId: l.poId,
+        poFolio: l.poFolio,
+      })),
     };
   }
 
@@ -123,27 +134,45 @@ export class ContainersController {
       const location = await defaultLocationId(tx, aplin.id);
       const qtyOf = new Map((data.lines ?? []).map((l) => [l.lineId, l.qtyReceived]));
       const receivedAt = new Date(`${data.receivedAt ?? new Date().toISOString().slice(0, 10)}T12:00:00Z`);
-      let pieces = 0;
+      const qtyBy = new Map(lines.map((l) => [l.id, qtyOf.has(l.id) ? qtyOf.get(l.id)! : l.qty]));
+      // Costo de entrada: costeo cerrado (final), estimado con precios y gastos (provisional) o el capturado en el renglón.
+      const costs = await this.costing.receiptCosts(tx, c, qtyBy);
+      // Un lote por SKU: si el SKU viene en varios renglones (varias órdenes), entra con su costo promedio.
+      const bySku = new Map<string, { qty: number; ordered: number; value: number; final: boolean; supplierId: string | null; line: number }>();
       let lineNo = 0;
       for (const l of lines) {
         lineNo++;
-        const q = qtyOf.has(l.id) ? qtyOf.get(l.id)! : l.qty;
-        if (q <= 0) continue;
+        const q = qtyBy.get(l.id)!;
+        await tx.update(importContainerLines).set({ qtyReceived: q }).where(eq(importContainerLines.id, l.id));
+        const cost = costs.get(l.id) ?? { cost: 0, final: false };
+        const g = bySku.get(l.masterSkuId) ?? { qty: 0, ordered: 0, value: 0, final: true, supplierId: l.supplierId, line: lineNo };
+        g.ordered += l.qty;
+        if (q > 0) {
+          g.qty += q;
+          g.value += q * cost.cost;
+          g.final = g.final && cost.final;
+        }
+        bySku.set(l.masterSkuId, g);
+      }
+      let pieces = 0;
+      for (const [skuId, g] of bySku) {
+        if (g.qty <= 0) continue;
+        const unitCost = g.value / g.qty;
         await postMovement(tx, {
           type: 'ENTRADA_IMPORTACION',
-          masterSkuId: l.masterSkuId,
+          masterSkuId: skuId,
           warehouseId: aplin.id,
           locationId: location,
-          qty: q,
-          unitCost: l.unitCost ?? 0,
-          lot: { code: c.code, receivedAt, supplierId: l.supplierId, costStatus: l.unitCost ? 'FINAL' : 'PROVISIONAL' },
-          document: { type: 'IMPORTACION', id: c.id, folio: c.code, line: lineNo },
+          qty: g.qty,
+          unitCost: fix4(unitCost),
+          lot: { code: c.code, receivedAt, supplierId: g.supplierId, costStatus: g.final && unitCost > 0 ? 'FINAL' : 'PROVISIONAL' },
+          document: { type: 'IMPORTACION', id: c.id, folio: c.code, line: g.line },
           userId: actor.id,
-          notes: q !== l.qty ? `Pedidas ${l.qty}, recibidas ${q}` : null,
+          notes: g.qty !== g.ordered ? `Pedidas ${g.ordered}, recibidas ${g.qty}` : null,
           occurredAt: receivedAt,
-          idempotencyKey: `CONT:${c.id}:${l.id}`,
+          idempotencyKey: `CONT:${c.id}:${skuId}`,
         });
-        pieces += q;
+        pieces += g.qty;
       }
       await refreshAvgCost(tx, lines.map((l) => l.masterSkuId));
       await tx.update(importContainers).set({ status: 'RECIBIDO', receivedAt, updatedById: actor.id }).where(eq(importContainers.id, id));

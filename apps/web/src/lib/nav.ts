@@ -74,6 +74,7 @@ export const NAV: NavSection[] = [
       { label: 'Movimientos', href: '/inventario/movimientos', perm: 'inventario.ver' },
       { label: 'Kardex', href: '/inventario/kardex', perm: 'inventario.ver' },
       { label: 'Lotes FIFO', href: '/inventario/lotes', perm: 'inventario.ver' },
+      { label: 'Valor por contenedor', href: '/inventario/valor', perm: 'costos.ver' },
       { label: 'Ajustes', href: '/inventario/ajustes', perm: 'ajustes.ver' },
       { label: 'Transferencias', href: '/inventario/transferencias', perm: 'transferencias.ver' },
       { label: 'Conteos físicos', href: '/inventario/conteos', perm: 'transferencias.ver' },
@@ -87,15 +88,15 @@ export const NAV: NavSection[] = [
       { label: 'Reabasto', href: '/reabasto', perm: 'reabasto.ver' },
       { label: 'Contenedores', href: '/compras/contenedores', perm: 'compras.ver' },
       { label: 'Proveedores', href: '/compras/proveedores', perm: 'proveedores.ver' },
-      soon('Órdenes de compra', 3, 'Órdenes de compra', 'compras.ver'),
+      { label: 'Órdenes de compra', href: '/compras/ordenes', perm: 'compras.ver' },
     ],
   },
   {
     label: 'Importaciones',
     icon: Ship,
     items: [
-      { label: 'Contenedores', href: '/compras/contenedores', perm: 'compras.ver' },
-      soon('Costo puesto en almacén', 8, 'Costo puesto en almacén (fase 3)', 'importaciones.ver'),
+      { label: 'Contenedores y costeo', href: '/compras/contenedores', perm: 'compras.ver' },
+      { label: 'Valor por contenedor', href: '/inventario/valor', perm: 'costos.ver' },
     ],
   },
   {
@@ -110,12 +111,12 @@ export const NAV: NavSection[] = [
   {
     label: 'Finanzas',
     icon: Wallet,
-    items: [soon('Ingresos y gastos', 9, 'Finanzas (fase 4)', 'finanzas.ver'), soon('Rentabilidad', 8, 'Rentabilidad (fase 3)', 'finanzas.ver')],
+    items: [soon('Ingresos y gastos', 9, 'Finanzas (fase 4)', 'finanzas.ver'), { label: 'P&L por SKU', href: '/reportes/pl-sku', perm: 'costos.ver' }],
   },
   {
     label: 'Reportes',
     icon: BarChart3,
-    items: [soon('Reportes', 5, 'Reportes', 'reportes.ver')],
+    items: [{ label: 'P&L por SKU', href: '/reportes/pl-sku', perm: 'costos.ver' }, soon('Otros reportes', 5, 'Reportes', 'reportes.ver')],
   },
   {
     label: 'Configuración',

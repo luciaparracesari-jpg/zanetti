@@ -5,6 +5,8 @@ export * from './catalog';
 export * from './channels';
 export * from './imports';
 export * from './inventory';
+export * from './purchasing';
+export * from './profitability';
 export * from './sales';
 export * from './integrations';
 export * from './relations';

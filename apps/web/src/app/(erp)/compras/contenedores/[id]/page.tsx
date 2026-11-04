@@ -4,17 +4,21 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { PackageCheck, Save, Trash2 } from 'lucide-react';
+import { Link2, PackageCheck, Save, Trash2 } from 'lucide-react';
 import { ApiError, del, get, patch, post } from '@/lib/api';
 import { fmtDate, fmtInt } from '@/lib/format';
 import { CONTAINER_STATUS, fmtDec } from '@/lib/replenishment';
 import { Can, useSession } from '@/lib/session';
+import { COST_STATUS, PO_STATUS, type PoRow } from '@/lib/purchasing';
+import { Attachments } from '@/components/attachments';
+import { ContainerCosting } from '@/components/container-costing';
 import { LocalTable, type LocalColumn } from '@/components/local-table';
 import { useToast } from '@/components/toast';
-import { Badge, Button, Dialog, ErrorBox, Field, Input, PageHeader, Panel, Select, Spinner, Stat } from '@/components/ui';
+import { Badge, Button, Checkbox, Dialog, ErrorBox, Field, Input, PageHeader, Panel, Select, Spinner, Stat, StatusBadge, Tabs } from '@/components/ui';
 
 interface Line {
   n: number;
+  id: string;
   skuId: string;
   skuCode: string;
   name: string | null;
@@ -24,6 +28,9 @@ interface Line {
   lead: number | null;
   caseUnits: number | null;
   cbm: number;
+  qtyReceived: number | null;
+  poId: string | null;
+  poFolio: string | null;
 }
 interface Container {
   id: string;
@@ -40,6 +47,7 @@ interface Container {
   skus: number;
   cbm: number;
   receivedAt: string | null;
+  costStatus: string;
   lines: Line[];
 }
 
@@ -67,7 +75,10 @@ function Detail({ c }: { c: Container }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [receive, setReceive] = useState(false);
+  const [link, setLink] = useState(false);
+  const [tab, setTab] = useState<'lines' | 'costing' | 'files'>('lines');
   const received = c.status === 'RECIBIDO';
+  const unlinked = c.lines.filter((l) => !l.poId).length;
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['/containers'] });
     qc.invalidateQueries({ queryKey: ['replenishment'] });
@@ -100,9 +111,11 @@ function Detail({ c }: { c: Container }) {
     { id: 'sku', header: 'SKU', cell: (l) => <Link href={`/productos/skus/${l.skuId}`} className="font-mono text-xs text-brand hover:underline">{l.skuCode}</Link>, value: (l) => l.skuCode },
     { id: 'name', header: 'Nombre', cell: (l) => <span className="text-xs">{l.name}</span>, value: (l) => l.name },
     { id: 'sup', header: 'Proveedor', cell: (l) => l.supplier ?? '—', value: (l) => l.supplier },
+    { id: 'po', header: 'Orden de compra', cell: (l) => (l.poId ? <Link href={`/compras/ordenes/${l.poId}`} className="text-xs text-brand hover:underline">{l.poFolio}</Link> : <span className="text-xs text-ink-soft">—</span>), value: (l) => l.poFolio },
     { id: 'order', header: 'Pedido', cell: (l) => fmtDate(l.orderDate), value: (l) => l.orderDate },
     { id: 'lead', header: 'Lead time', align: 'right', cell: (l) => (l.lead ? `${l.lead} d` : '—'), value: (l) => l.lead },
     { id: 'qty', header: 'Piezas', align: 'right', cell: (l) => fmtInt(l.qty), value: (l) => l.qty },
+    ...(received ? ([{ id: 'rec', header: 'Recibidas', align: 'right', cell: (l: Line) => <span className={l.qtyReceived !== null && l.qtyReceived !== l.qty ? 'font-semibold text-warn' : ''}>{fmtInt(l.qtyReceived)}</span>, value: (l: Line) => l.qtyReceived }] as LocalColumn<Line>[]) : []),
     { id: 'cases', header: 'Cajas', align: 'right', cell: (l) => (l.caseUnits ? fmtDec(l.qty / l.caseUnits) : '—'), value: (l) => (l.caseUnits ? l.qty / l.caseUnits : null) },
     { id: 'cbm', header: 'CBM', align: 'right', cell: (l) => (l.cbm ? fmtDec(l.cbm, 2) : '—'), value: (l) => l.cbm },
   ];
@@ -110,7 +123,7 @@ function Detail({ c }: { c: Container }) {
     <>
       <PageHeader
         breadcrumbs={[{ label: 'Compras' }, { label: 'Contenedores', href: '/compras/contenedores' }, { label: c.code }]}
-        title={<span className="flex items-center gap-2">Contenedor {c.code} <Badge tone={received ? 'ok' : 'warn'}>{CONTAINER_STATUS[c.status]}</Badge></span>}
+        title={<span className="flex flex-wrap items-center gap-2">Contenedor {c.code} <Badge tone={received ? 'ok' : 'warn'}>{CONTAINER_STATUS[c.status]}</Badge>{c.status !== 'PLANEADO' && <StatusBadge value={c.costStatus} labels={COST_STATUS} />}</span>}
         subtitle={received ? `Recibido en APLIN el ${fmtDate(c.receivedAt?.slice(0, 10))}.` : `Llega a APLIN aprox. el ${fmtDate(c.eta)} (${SOURCE[c.etaSource]}).`}
         actions={
           !received && (
@@ -158,8 +171,33 @@ function Detail({ c }: { c: Container }) {
           </div>
         </Panel>
       )}
-      <LocalTable rows={c.lines} columns={cols} rowKey={(l) => `${l.n}`} search={(l) => `${l.skuCode} ${l.name ?? ''} ${l.supplier ?? ''}`} csvName={`contenedor-${c.code}`} />
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'lines', label: `Renglones (${c.lines.length})` },
+          { value: 'costing', label: 'Costeo', hidden: !can('costos.ver') },
+          { value: 'files', label: 'Archivos' },
+        ]}
+      />
+      {tab === 'lines' && (
+        <LocalTable
+          rows={c.lines}
+          columns={cols}
+          rowKey={(l) => l.id}
+          search={(l) => `${l.skuCode} ${l.name ?? ''} ${l.supplier ?? ''} ${l.poFolio ?? ''}`}
+          csvName={`contenedor-${c.code}`}
+          toolbar={
+            unlinked > 0 && c.costStatus !== 'CERRADO' && can('compras.editar') && (
+              <Button size="sm" icon={<Link2 className="h-4 w-4" />} onClick={() => setLink(true)}>Ligar a órdenes ({unlinked} sin orden)</Button>
+            )
+          }
+        />
+      )}
+      {tab === 'costing' && <ContainerCosting containerId={c.id} />}
+      {tab === 'files' && <Attachments entityType="CONTAINER" entityId={c.id} kinds={['PEDIMENTO', 'FACTURA', 'FACTURA_GASTO', 'PACKING_LIST', 'BL', 'OTRO']} />}
       {receive && <ReceiveDialog c={c} onClose={() => setReceive(false)} onDone={refresh} />}
+      {link && <LinkOrdersDialog c={c} onClose={() => setLink(false)} onDone={refresh} />}
     </>
   );
 }
@@ -195,10 +233,61 @@ function ReceiveDialog({ c, onClose, onDone }: { c: Container; onClose: () => vo
     >
       <div className="grid gap-3">
         <ErrorBox error={error} />
-        <p className="text-sm text-ink-soft">Cada línea entra como un lote “{c.code}” en APLIN con su costo. Si la línea no tiene costo, el lote queda con costo provisional para capturarlo después. Para diferencias contra lo pedido, haz después un ajuste o un conteo.</p>
+        <p className="text-sm text-ink-soft">
+          Cada SKU entra como un lote “{c.code}” en APLIN. Con el costeo cerrado entra con su costo final; si sigue abierto, con el costo estimado (precio de la orden + arancel + gastos capturados) como provisional, y al cerrar el costeo se ajusta. Para diferencias contra lo pedido, haz después un ajuste o un conteo.
+        </p>
         <Field label="Fecha de recepción">
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
+      </div>
+    </Dialog>
+  );
+}
+
+function LinkOrdersDialog({ c, onClose, onDone }: { c: Container; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const orders = useQuery({ queryKey: ['/purchase-orders', 'open'], queryFn: () => get<{ items: PoRow[] }>('/purchase-orders?status=BORRADOR,ENVIADA,CONFIRMADA&pageSize=100') });
+  const [sel, setSel] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await post<{ linked: number; unmatched: string[] }>(`/containers/${c.id}/link-orders`, { poIds: sel });
+      toast.ok(`${r.linked} renglones ligados.${r.unmatched.length ? ` Sin orden: ${r.unmatched.join(', ')}.` : ''}`);
+      onDone();
+      onClose();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : e);
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={`Ligar ${c.code} a órdenes de compra`}
+      footer={<><Button onClick={onClose}>Cancelar</Button><Button variant="primary" loading={busy} disabled={!sel.length} onClick={submit}>Ligar</Button></>}
+    >
+      <div className="grid gap-3">
+        <ErrorBox error={error} />
+        <p className="text-sm text-ink-soft">Cada renglón sin orden se liga al renglón del mismo SKU en las órdenes que elijas; así toma su precio y proveedor para el costeo.</p>
+        {orders.isLoading ? (
+          <Spinner />
+        ) : (
+          <div className="grid gap-1">
+            {(orders.data?.items ?? []).map((o) => (
+              <Checkbox
+                key={o.id}
+                checked={sel.includes(o.id)}
+                onChange={(e) => setSel((x) => (e.target.checked ? [...x, o.id] : x.filter((y) => y !== o.id)))}
+                label={`${o.folio} · ${o.supplier} · ${fmtInt(o.pieces)} pzas · ${PO_STATUS[o.status]}${o.containers ? ` · en ${o.containers}` : ''}`}
+              />
+            ))}
+            {!orders.data?.items.length && <p className="text-sm text-ink-soft">No hay órdenes abiertas.</p>}
+          </div>
+        )}
       </div>
     </Dialog>
   );

@@ -29,6 +29,7 @@ export function LocalTable<T>({
   columns,
   rowKey,
   rowClassName,
+  onRowClick,
   search,
   searchPlaceholder = 'Buscar SKU o nombre…',
   csvName,
@@ -42,6 +43,8 @@ export function LocalTable<T>({
   columns: LocalColumn<T>[];
   rowKey: (r: T) => string;
   rowClassName?: (r: T) => string | undefined;
+  /** Clic en el renglón (fuera de ligas y botones). */
+  onRowClick?: (r: T) => void;
   search?: (r: T) => string;
   searchPlaceholder?: string;
   csvName?: string;
@@ -148,7 +151,11 @@ export function LocalTable<T>({
               </tr>
             ) : (
               shown.map((r) => (
-                <tr key={rowKey(r)} className={cx('hover:bg-brand-soft/30', rowClassName?.(r))}>
+                <tr
+                  key={rowKey(r)}
+                  className={cx('hover:bg-brand-soft/30', onRowClick && 'cursor-pointer', rowClassName?.(r))}
+                  onClick={onRowClick ? (e) => !(e.target as HTMLElement).closest('a,button,input,select,textarea') && onRowClick(r) : undefined}
+                >
                   {columns.map((c) => (
                     <td
                       key={c.id}

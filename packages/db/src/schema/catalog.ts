@@ -128,6 +128,8 @@ export const masterSkus = pgTable(
     preferredSupplierId: uuid().references(() => suppliers.id, { onDelete: 'set null' }),
     leadTimeDays: integer(),
     safetyDays: integer(),
+    /** Arancel (IGI) de su fracción arancelaria, como fracción: 0.25 = 25%. Se aplica al precio del proveedor al costear. */
+    dutyRate: numeric({ precision: 6, scale: 4 }),
     minQty: integer(),
     maxQty: integer(),
     status: skuStatus().notNull().default('ACTIVO'),
